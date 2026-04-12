@@ -1,0 +1,23 @@
+{
+  "models": [
+    {
+      "title": "DeepSeek Coder",
+      "provider": "ollama",
+      "model": "deepseek-coder"
+    },
+    {
+      "title": "Qwen Coder",
+      "provider": "ollama",
+      "model": "qwen2.5-coder"
+    },
+    {
+      "title": "Llama 3",
+      "provider": "ollama",
+      "model": "llama3"
+    }
+  ],
+  "tabAutocompleteModel": {
+    "provider": "ollama",
+    "model": "deepseek-coder"
+  }
+}
