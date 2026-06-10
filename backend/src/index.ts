@@ -15,9 +15,15 @@ async function startServer() {
     console.error("Database seeding failed:", err)
   }
 
-  app.listen(port, () => {
-    console.log(`Backend server listening on http://localhost:${port}`)
-  })
+  // Only call app.listen if we are not running in a Vercel serverless environment
+  if (process.env.VERCEL !== "1") {
+    app.listen(port, () => {
+      console.log(`Backend server listening on http://localhost:${port}`)
+    })
+  }
 }
 
 startServer()
+
+export default app
+
