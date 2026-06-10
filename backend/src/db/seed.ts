@@ -1,8 +1,24 @@
+import fs from "fs"
+import path from "path"
+import { fileURLToPath } from "url"
 import { pool } from "../db.js"
 import { MOCK_USER_ID, MOCK_DEALERSHIP_ID } from "../middleware/authMiddleware.js"
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
 export async function seedDatabase() {
+  console.log("Ensuring database tables are initialized...")
+  try {
+    const schemaSql = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8")
+    await pool.query(schemaSql)
+    console.log("Database tables initialized successfully.")
+  } catch (err) {
+    console.error("Failed to initialize database tables:", err)
+    throw err
+  }
+
   console.log("Seeding database with mock data...")
+
 
   // 1. Ensure Dealership and User exist
   const dealerRes = await pool.query("SELECT id FROM dealerships WHERE id = $1", [MOCK_DEALERSHIP_ID])
