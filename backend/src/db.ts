@@ -7,4 +7,7 @@ console.log("DATABASE_URL at load time in db.ts:", process.env.DATABASE_URL)
 
 export const pool: Pool = new PgPool({
   connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes("supabase.com")
+    ? { rejectUnauthorized: false }
+    : undefined,
 })
