@@ -26,10 +26,11 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-3xl border border-slate-900 bg-slate-900/40 p-10 shadow-2xl backdrop-blur-md relative z-10 space-y-8">
         
         {/* Brand/Logo */}
-        <div className="space-y-3 text-center">
+        <div className="space-y-3 text-center flex flex-col items-center">
           <Link href="/" className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-400 hover:text-brand-300 transition">
             ← AI Ad Manager
           </Link>
+          <img src="/logo.png" alt="AI Ad Manager Logo" className="h-12 w-12 object-contain py-2" />
           <h1 className="text-2xl font-bold text-slate-100">
             Welcome to Dealer Console
           </h1>

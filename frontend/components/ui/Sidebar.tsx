@@ -25,10 +25,12 @@ export default function Sidebar({ onClose }: SidebarProps) {
       <div className="space-y-8">
         {/* Brand Logo - CarDekho Style */}
         <div className="flex items-center gap-3 px-2">
-          {/* Blue CD Icon Box */}
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0052cc] text-white font-extrabold text-sm tracking-tight shrink-0 shadow-sm">
-            CD
-          </div>
+          {/* Premium Megaphone-Car Ad Logo */}
+          <img 
+            src="/logo.png" 
+            alt="CarDekho AdManager Logo" 
+            className="h-9 w-9 object-contain rounded-lg shrink-0 shadow-sm"
+          />
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-extrabold text-slate-800 tracking-tight">CarDekho</span>

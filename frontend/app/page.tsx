@@ -12,7 +12,8 @@ export default function HomePage() {
         
         {/* Navigation / Brand Header */}
         <header className="flex justify-between items-center pb-12 border-b border-slate-900">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="AI Ad Manager Logo" className="h-8 w-8 object-contain" />
             <span className="text-2xl font-bold tracking-tight bg-gradient-to-r from-brand-300 to-brand-500 bg-clip-text text-transparent">
               AI Ad Manager
             </span>
