@@ -7,6 +7,16 @@ const DAY = 86_400_000
 const day = (ago: number) =>
   new Date(NOW.getTime() - ago * DAY).toISOString().slice(0, 10)
 
+/** Default account config for fixtures: agency-owned, agency-billed. */
+function acct() {
+  return {
+    ownership: "agency_owned" as const,
+    billing: "agency_billed" as const,
+    grant: "not_requested" as const,
+    lastVerifiedAt: null,
+  }
+}
+
 function dealer(over: Partial<Dealer> = {}): Dealer {
   return {
     id: "d1", code: "TEST", name: "Test Motors", city: "Lucknow",
@@ -15,6 +25,7 @@ function dealer(over: Partial<Dealer> = {}): Dealer {
     virtualNumber: null, landingPageUrl: null, lmsAccountRef: null,
     status: "active", ownerId: "u1",
     platform: {
+      google: acct(), meta: acct(),
       googleCustomerId: "g", googleState: "ready", googleVerified: true,
       metaBusinessId: "m", metaPageId: "p", metaAdAccountId: "a",
       metaState: "ready", metaVerified: true,

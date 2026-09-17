@@ -80,10 +80,62 @@ export interface Dealer {
 
 export type ProvisionState = "not_started" | "in_progress" | "ready" | "blocked"
 
+/**
+ * Who owns the ad account, tracked per platform rather than per dealer — a
+ * dealer can plausibly be agency-owned on Google and dealer-owned on Meta,
+ * especially mid-transition.
+ *
+ *   agency_owned  — we create and own the account. The dealer touches nothing.
+ *                   We carry the gross ad spend on our balance sheet.
+ *   dealer_linked — the dealer owns the account; they granted us access
+ *                   (Google manager link or OAuth, Meta Business Portfolio
+ *                   partner access). They keep their history and audiences if
+ *                   they leave, and our credit exposure is the unpaid fee
+ *                   rather than the gross spend.
+ */
+export type OwnershipMode = "agency_owned" | "dealer_linked"
+
+/**
+ * Who pays the platform.
+ *
+ * These are deliberately separate from ownership, because the useful
+ * combination is the one that is not obvious: on Google a dealer can own the
+ * account while OUR payments profile is billed for it, via a manager billing
+ * setup on consolidated invoicing. Google's docs are explicit that accounts
+ * need to be LINKED to the paying manager, not created by it.
+ *
+ * The equivalent on Meta — whether a credit line can pay for an ad account we
+ * only have partner access to — is NOT confirmed from any official Meta
+ * source. Until it is, treat `agency_billed` on Meta as unverified.
+ */
+export type BillingMode = "agency_billed" | "dealer_billed"
+
+/** Health of a delegated-access grant. Only meaningful when dealer_linked. */
+export type GrantState =
+  | "not_requested"
+  | "invited"      // link sent, dealer has not completed it
+  | "active"
+  | "expired"      // Meta user tokens last ~60 days
+  | "revoked"      // dealer withdrew access, or an employee left
+
+export interface PlatformAccount {
+  ownership: OwnershipMode
+  billing: BillingMode
+  /**
+   * Only meaningful when ownership is dealer_linked. Delegated access breaks
+   * silently — a password change, a revoked permission, or the employee who
+   * granted it leaving. At a hundred dealers this needs monitoring, not trust.
+   */
+  grant: GrantState
+  /** Last time a real API call against this account succeeded. */
+  lastVerifiedAt: string | null
+}
+
 export interface PlatformAssets {
-  /** Google Ads client account under our MCC. One per dealer, required. */
+  /** Google Ads client account. Ours under our MCC, or the dealer's, linked. */
   googleCustomerId: string | null
   googleState: ProvisionState
+  google: PlatformAccount
   /**
    * Google Advertiser Identity Verification, completed per dealer via the
    * "verifying on behalf of a client" flow. Without it the "Why this ad?"
@@ -97,6 +149,7 @@ export interface PlatformAssets {
   metaAdAccountId: string | null
   metaState: ProvisionState
   metaVerified: boolean
+  meta: PlatformAccount
 
   /**
    * The signed services agreement naming us as the dealer's authorised

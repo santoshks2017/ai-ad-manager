@@ -41,9 +41,24 @@ function assets(opts: {
   agreement?: boolean
   docs?: boolean
   code?: string
+  /** Defaults to agency-owned; pass "dealer_linked" for a delegated dealer. */
+  ownership?: "agency_owned" | "dealer_linked"
+  billing?: "agency_billed" | "dealer_billed"
 }): Dealer["platform"] {
   const c = opts.code ?? "XXX"
+  const ownership = opts.ownership ?? "agency_owned"
+  const billing = opts.billing ?? "agency_billed"
+  const account = (ready: boolean) => ({
+    ownership,
+    billing,
+    grant: (ownership === "dealer_linked"
+      ? (ready ? "active" : "invited")
+      : "not_requested") as Dealer["platform"]["google"]["grant"],
+    lastVerifiedAt: ready ? new Date().toISOString() : null,
+  })
   return {
+    google: account(Boolean(opts.google)),
+    meta: account(Boolean(opts.meta)),
     googleCustomerId: opts.google ? `${c}-google-client` : null,
     googleState: opts.google ? "ready" : "not_started",
     googleVerified: opts.google ? (opts.verified ?? true) : false,
