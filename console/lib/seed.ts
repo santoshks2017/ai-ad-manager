@@ -6,7 +6,7 @@
  * exist. It must never be presented as real performance.
  */
 
-import type { MemoryStore } from "./store"
+import type { Store } from "./store"
 import type { Campaign, Dealer, MetricsDaily, Optimization, Order, User } from "./types"
 
 const iso = (daysAgo: number) =>
@@ -111,8 +111,8 @@ const DEALERS: Omit<Dealer, "id" | "createdAt" | "updatedAt">[] = [
   },
 ]
 
-export async function seed(store: MemoryStore): Promise<void> {
-  store.users = USERS
+export async function seed(store: Store): Promise<void> {
+  for (const u of USERS) await store.createUser(u)
 
   const dealers: Dealer[] = []
   for (const d of DEALERS) dealers.push(await store.createDealer(d))

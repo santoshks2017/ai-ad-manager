@@ -42,6 +42,7 @@ export interface Store {
   updateOptimization(id: string, patch: Partial<Optimization>): Promise<Optimization | null>
 
   listUsers(): Promise<User[]>
+  createUser(u: User): Promise<void>
 }
 
 function id(prefix: string): string {
@@ -163,6 +164,11 @@ class MemoryStore implements Store {
   async listUsers() {
     return this.users
   }
+  async createUser(u: User) {
+    const idx = this.users.findIndex((x) => x.id === u.id)
+    if (idx === -1) this.users.push(u)
+    else this.users[idx] = u
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -221,20 +227,24 @@ class FirestoreStore implements Store {
   }
 
   async listOrders(status?: Order["status"]) {
-    const all = (await this.all<Order>("orders")).sort((a, b) =>
-      b.submittedAt.localeCompare(a.submittedAt),
-    )
-    return status ? all.filter((o) => o.status === status) : all
+    let q = this.col("orders")
+    if (status) q = q.where("status", "==", status)
+    const snap = await q.get()
+    return snap.docs
+      .map((d: any) => ({ id: d.id, ...d.data() }) as Order)
+      .sort((a: Order, b: Order) => b.submittedAt.localeCompare(a.submittedAt))
   }
   async getOrder(i: string) { return this.one<Order>("orders", i) }
   async createOrder(o: Omit<Order, "id">) { return this.add<Order>("orders", o) }
   async updateOrder(i: string, p: Partial<Order>) { return this.patch<Order>("orders", i, p) }
 
   async listCampaigns(dealerId?: string) {
-    const all = (await this.all<Campaign>("campaigns")).sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt),
-    )
-    return dealerId ? all.filter((c) => c.dealerId === dealerId) : all
+    let q = this.col("campaigns")
+    if (dealerId) q = q.where("dealerId", "==", dealerId)
+    const snap = await q.get()
+    return snap.docs
+      .map((d: any) => ({ id: d.id, ...d.data() }) as Campaign)
+      .sort((a: Campaign, b: Campaign) => b.createdAt.localeCompare(a.createdAt))
   }
   async createCampaign(c: Omit<Campaign, "id" | "createdAt">) {
     return this.add<Campaign>("campaigns", { ...c, createdAt: now() })
@@ -244,23 +254,27 @@ class FirestoreStore implements Store {
   }
 
   async listMetrics(dealerId?: string, from?: string, to?: string) {
-    const all = await this.all<MetricsDaily>("metricsDaily")
-    return all.filter(
-      (m) =>
-        (!dealerId || m.dealerId === dealerId) &&
-        (!from || m.date >= from) &&
-        (!to || m.date <= to),
-    )
+    // Filter server-side. Firestore bills per document returned, so pulling the
+    // whole collection and filtering in memory turns one optimisation scan into
+    // thousands of billable reads.
+    let q = this.col("metricsDaily")
+    if (dealerId) q = q.where("dealerId", "==", dealerId)
+    if (from) q = q.where("date", ">=", from)
+    if (to) q = q.where("date", "<=", to)
+    const snap = await q.get()
+    return snap.docs.map((d: any) => ({ id: d.id, ...d.data() }) as MetricsDaily)
   }
   async upsertMetrics(m: MetricsDaily) {
     await this.col("metricsDaily").doc(m.id).set(m, { merge: true })
   }
 
   async listOptimizations(status?: Optimization["status"]) {
-    const all = (await this.all<Optimization>("optimizations")).sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt),
-    )
-    return status ? all.filter((o) => o.status === status) : all
+    let q = this.col("optimizations")
+    if (status) q = q.where("status", "==", status)
+    const snap = await q.get()
+    return snap.docs
+      .map((d: any) => ({ id: d.id, ...d.data() }) as Optimization)
+      .sort((a: Optimization, b: Optimization) => b.createdAt.localeCompare(a.createdAt))
   }
   async createOptimization(o: Omit<Optimization, "id" | "createdAt">) {
     return this.add<Optimization>("optimizations", { ...o, createdAt: now() })
@@ -270,6 +284,9 @@ class FirestoreStore implements Store {
   }
 
   async listUsers() { return this.all<User>("users") }
+  async createUser(u: User) {
+    await this.col("users").doc(u.id).set(u, { merge: true })
+  }
 }
 
 // ---------------------------------------------------------------------------
