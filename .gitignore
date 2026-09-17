@@ -7,3 +7,10 @@ dist
 next-env.d.ts
 **/.next
 **/.vercel
+
+# Build/debug leftovers
+*-logs*.txt
+logs*.txt
+backend/test-db.js
+ip-ranges.json
+.DS_Store

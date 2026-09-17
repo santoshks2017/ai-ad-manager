@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ground: #f2f4f3;
+  --surface: #ffffff;
+  --ink: #111518;
+  --rule: #d5dad8;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+  }
+  /* Every figure is tabular. A ledger's columns must align. */
+  .num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+  :focus-visible {
+    outline: 2px solid #1b3a6b;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Data surfaces are printed rate cards: square corners, hairline rules. */
+  .sheet {
+    @apply bg-surface border border-rule;
+  }
+  .sheet-row {
+    @apply border-t border-rule;
+  }
+  .eyebrow {
+    @apply text-2xs uppercase tracking-[0.14em] text-ink-faint font-medium;
+  }
+  .card {
+    @apply bg-surface border border-rule rounded-lg;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 h-10 rounded-md
+           text-sm font-medium transition-colors disabled:opacity-40
+           disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-[#16305a];
+  }
+  .btn-quiet {
+    @apply btn border border-rule-strong bg-surface text-ink hover:bg-ground;
+  }
+  .field {
+    @apply w-full h-10 px-3 bg-surface border border-rule-strong rounded-md
+           text-sm outline-none focus:border-accent;
+  }
+  .label {
+    @apply block text-2xs uppercase tracking-[0.12em] text-ink-soft font-medium mb-1.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

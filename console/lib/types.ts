@@ -1,0 +1,257 @@
+/**
+ * Domain types for the agency operations console.
+ *
+ * One tenant: us. Dealers are records, not tenants — they have no logins and
+ * no platform accounts. Campaigns run in our own Google MCC and Meta Business
+ * Manager and are attributed back to a dealer by the local mapping here.
+ */
+
+export type Role = "sales" | "account_manager" | "admin"
+
+export type Platform = "google" | "meta"
+
+/**
+ * Whether a record came from a real platform API or from the simulator.
+ *
+ * This is deliberately part of the persisted data rather than a runtime flag.
+ * The previous codebase returned fabricated campaign IDs silently under a
+ * SANDBOX_MODE env var, which made "is this real?" unanswerable downstream.
+ * Carrying provenance on the record makes mixing detectable.
+ */
+export type Provenance = "live" | "simulated"
+
+export type Objective =
+  | "leads"
+  | "test_drive"
+  | "exchange"
+  | "model_launch"
+  | "festive_offer"
+
+export const OBJECTIVES: { value: Objective; label: string }[] = [
+  { value: "leads", label: "General enquiry" },
+  { value: "test_drive", label: "Test drive booking" },
+  { value: "exchange", label: "Exchange / upgrade" },
+  { value: "model_launch", label: "New model launch" },
+  { value: "festive_offer", label: "Festive offer" },
+]
+
+export interface User {
+  id: string
+  email: string
+  name: string
+  role: Role
+  active: boolean
+  createdAt: string
+}
+
+export interface Dealer {
+  id: string
+  /** Short stable code used in platform campaign names for attribution. */
+  code: string
+  name: string
+  city: string
+  state: string
+  brands: string[]
+  models: string[]
+  monthlyBudget: number
+  /** Set deliberately at activation. Never auto-populated from a projection. */
+  committedCpl: number | null
+  virtualNumber: string | null
+  landingPageUrl: string | null
+  lmsAccountRef: string | null
+  status: "prospect" | "active" | "paused" | "churned"
+  ownerId: string | null
+  /**
+   * Platform assets provisioned BY US, on the dealer's behalf.
+   *
+   * Both platforms require one ad account per end-advertiser — Google's
+   * third-party policy says "we require that you use a separate account for
+   * each end-advertiser that you manage", and Meta's Business Tools Terms say
+   * "each advertiser or client must be managed through separate ad accounts".
+   * Sharing one account across dealers is a policy violation, not a shortcut.
+   *
+   * The dealer still never logs in. We create and operate all of this as their
+   * authorised representative under a signed services agreement.
+   */
+  platform: PlatformAssets
+  createdAt: string
+  updatedAt: string
+}
+
+export type ProvisionState = "not_started" | "in_progress" | "ready" | "blocked"
+
+export interface PlatformAssets {
+  /** Google Ads client account under our MCC. One per dealer, required. */
+  googleCustomerId: string | null
+  googleState: ProvisionState
+  /**
+   * Google Advertiser Identity Verification, completed per dealer via the
+   * "verifying on behalf of a client" flow. Without it the "Why this ad?"
+   * disclosure can name us rather than the dealer.
+   */
+  googleVerified: boolean
+
+  /** Meta needs three assets per dealer, not one. */
+  metaBusinessId: string | null
+  metaPageId: string | null
+  metaAdAccountId: string | null
+  metaState: ProvisionState
+  metaVerified: boolean
+
+  /**
+   * The signed services agreement naming us as the dealer's authorised
+   * representative. This is the actual authorisation layer for both
+   * platforms — Meta's Pages Policy requires an "authorised representative"
+   * and Google's India verification can ask for proof of the relationship.
+   * Treat it as compliance infrastructure, not just a commercial contract.
+   */
+  servicesAgreementSigned: boolean
+  /** Legal docs (GST / incorporation / Udyam) needed for both verifications. */
+  legalDocsCollected: boolean
+}
+
+export type Confidence = "high" | "medium" | "low"
+
+/** Which data source backed a projection. Reported to the user, never hidden. */
+export type ProjectionBasis =
+  | "historical"   // our own past campaigns for this segment
+  | "keyword_api"  // live Google Keyword Planner data
+  | "benchmark"    // seeded India auto-vertical priors
+
+export interface ProjectionInput {
+  budget: number
+  city: string
+  brand: string
+  model: string
+  objective: Objective
+  durationDays: number
+}
+
+export interface PlatformProjection {
+  platform: Platform
+  spendShare: number
+  spend: number
+  cplLow: number
+  cplHigh: number
+  leadsLow: number
+  leadsHigh: number
+}
+
+export interface ProjectionOutput {
+  cplLow: number
+  cplHigh: number
+  leadsLow: number
+  leadsHigh: number
+  confidence: Confidence
+  basis: ProjectionBasis
+  sampleSize: number
+  platforms: PlatformProjection[]
+  /** Plain-language notes shown with the quote, e.g. competition warnings. */
+  notes: string[]
+  /** Projections go stale; a stale one must not become a silent commitment. */
+  expiresAt: string
+}
+
+export interface Projection {
+  id: string
+  input: ProjectionInput
+  output: ProjectionOutput
+  createdBy: string
+  createdAt: string
+}
+
+export type OrderStatus = "draft" | "submitted" | "activated" | "rejected"
+
+export interface Order {
+  id: string
+  projectionId: string | null
+  dealerId: string
+  status: OrderStatus
+  /** The CPL sales actually promised. A human decision, recorded explicitly. */
+  committedCpl: number | null
+  budget: number
+  startDate: string
+  notes: string | null
+  submittedBy: string
+  submittedAt: string
+  activatedBy: string | null
+  activatedAt: string | null
+  rejectedReason: string | null
+}
+
+export interface Campaign {
+  id: string
+  dealerId: string
+  platform: Platform
+  platformCampaignId: string
+  name: string
+  objective: Objective
+  dailyBudget: number
+  status: "active" | "paused" | "ended" | "failed"
+  provenance: Provenance
+  createdBy: string
+  createdAt: string
+}
+
+export interface MetricsDaily {
+  id: string
+  dealerId: string
+  campaignId: string | null
+  platform: Platform
+  date: string
+  spend: number
+  impressions: number
+  clicks: number
+  leads: number
+  provenance: Provenance
+}
+
+export type OptimizationKind =
+  | "pause_underperformer"
+  | "shift_budget"
+  | "adjust_bid"
+  | "expand_targeting"
+  | "refresh_creative"
+  | "pacing_correction"
+
+export type OptimizationStatus =
+  | "proposed"
+  | "approved"
+  | "applied"
+  | "rejected"
+  | "reverted"
+
+export interface Optimization {
+  id: string
+  campaignId: string
+  dealerId: string
+  kind: OptimizationKind
+  /** Why, in plain language. Feeds the dealer-facing activity log. */
+  rationale: string
+  proposedChange: Record<string, unknown>
+  /** Stored so every action is reversible. */
+  priorState: Record<string, unknown> | null
+  /** Low-risk reversible actions may auto-apply; everything else needs a human. */
+  requiresApproval: boolean
+  status: OptimizationStatus
+  provenance: Provenance
+  decidedBy: string | null
+  createdAt: string
+  decidedAt: string | null
+  appliedAt: string | null
+}
+
+export interface Benchmark {
+  id: string
+  city: string
+  segment: string
+  objective: Objective
+  platform: Platform
+  cplLow: number
+  cplHigh: number
+  ctr: number
+  convRate: number
+  sampleSize: number
+  source: string
+  updatedAt: string
+}
