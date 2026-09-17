@@ -19,6 +19,14 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // The dealer onboarding page is opened by dealers from a WhatsApp link, so it
+  // cannot sit behind the staff passphrase. It exposes only the dealer's own
+  // name, city and remaining setup steps — no performance figures, no spend,
+  // and no data about any other dealer.
+  if (req.nextUrl.pathname.startsWith("/onboard/")) {
+    return NextResponse.next()
+  }
+
   const expected = process.env.ACCESS_PASSWORD
   if (!expected) return NextResponse.next()
 

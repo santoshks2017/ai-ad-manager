@@ -103,7 +103,18 @@ const DEALERS: Omit<Dealer, "id" | "createdAt" | "updatedAt">[] = [
     monthlyBudget: 120_000, committedCpl: 295, virtualNumber: "+91 80random-0114",
     landingPageUrl: "https://lp.cardekho-ads.in/sri-maruti-coimbatore",
     lmsAccountRef: "LMS-SRIMRT-001", status: "active", ownerId: "u_am2",
-    platform: assets({ google: true, meta: true, code: "srimrt" }),
+    platform: {
+      ...assets({
+        google: true, meta: true, code: "srimrt",
+        ownership: "dealer_linked", billing: "dealer_billed",
+      }),
+      meta: {
+        ownership: "dealer_linked" as const,
+        billing: "dealer_billed" as const,
+        grant: "revoked" as const,
+        lastVerifiedAt: new Date(Date.now() - 9 * 86_400_000).toISOString(),
+      },
+    },
   },
   {
     code: "KLKIAP", name: "Kalyani Kia", city: "Pune", state: "Maharashtra",
@@ -112,9 +123,21 @@ const DEALERS: Omit<Dealer, "id" | "createdAt" | "updatedAt">[] = [
     landingPageUrl: "https://lp.cardekho-ads.in/kalyani-kia-pune",
     lmsAccountRef: "LMS-KLKIAP-001", status: "active", ownerId: "u_am1",
     platform: {
-      ...assets({ google: true, meta: true, code: "klkiap" }),
+      ...assets({
+        google: true, meta: true, code: "klkiap",
+        ownership: "dealer_linked", billing: "agency_billed",
+      }),
+      // Part-way through onboarding: they own and connected Google, created
+      // the Meta portfolio and Page, but have not granted us partner access.
+      metaAdAccountId: null,
       metaVerified: false,
       metaState: "in_progress" as const,
+      meta: {
+        ownership: "dealer_linked" as const,
+        billing: "agency_billed" as const,
+        grant: "invited" as const,
+        lastVerifiedAt: null,
+      },
     },
   },
   {
