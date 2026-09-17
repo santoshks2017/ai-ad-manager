@@ -7,6 +7,7 @@ const NAV = [
   { href: "/activations", label: "Activations" },
   { href: "/campaigns", label: "Campaigns" },
   { href: "/optimisations", label: "Optimisations" },
+  { href: "/setup", label: "Setup" },
 ]
 
 export function Shell({
