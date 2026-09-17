@@ -3,6 +3,7 @@ import { z } from "zod"
 import { project } from "@/lib/projection"
 import { getStore } from "@/lib/store"
 import type { HistoricalSample } from "@/lib/projection"
+import type { Objective } from "@/lib/types"
 
 const Body = z.object({
   budget: z.number().min(5_000).max(50_000_000),
@@ -32,7 +33,12 @@ export async function POST(req: Request) {
   // Prefer our own results for this segment over category benchmarks. The
   // engine reports which basis it used, so a thin sample never masquerades as
   // a confident forecast.
-  const historical = await findHistorical(store, parsed.city, parsed.model)
+  const historical = await findHistorical(
+    store,
+    parsed.city,
+    parsed.model,
+    parsed.objective,
+  )
 
   const output = project(
     {
@@ -66,14 +72,21 @@ export async function POST(req: Request) {
 }
 
 /**
- * Pull our own delivered CPL for dealers matching this city and model.
- * Returns an empty list when we have not run the segment, which drops the
- * engine back to benchmark basis and low confidence.
+ * Pull our own delivered CPL for dealers matching this city, model AND
+ * objective.
+ *
+ * Matching on objective is not optional. A test-drive booking costs markedly
+ * more per lead than a general enquiry, so projecting a test drive from
+ * general-enquiry history understates CPL — exactly the kind of quiet
+ * under-quote that turns into a dispute at invoice time. If we have not run
+ * this objective in this segment, we return nothing and the engine falls back
+ * to benchmarks at low confidence, which is the honest answer.
  */
 async function findHistorical(
   store: Awaited<ReturnType<typeof getStore>>,
   city: string,
   model: string,
+  objective: Objective,
 ): Promise<HistoricalSample[]> {
   const dealers = await store.listDealers()
   const matches = dealers.filter(
@@ -87,7 +100,16 @@ async function findHistorical(
   const samples: HistoricalSample[] = []
 
   for (const d of matches) {
-    const metrics = await store.listMetrics(d.id, since)
+    const campaigns = await store.listCampaigns(d.id)
+    const relevant = new Set(
+      campaigns.filter((c) => c.objective === objective).map((c) => c.id),
+    )
+    if (relevant.size === 0) continue
+
+    const metrics = (await store.listMetrics(d.id, since)).filter(
+      (m) => m.campaignId && relevant.has(m.campaignId),
+    )
+
     const byPlatform = new Map<string, { spend: number; leads: number }>()
     for (const m of metrics) {
       const acc = byPlatform.get(m.platform) ?? { spend: 0, leads: 0 }
