@@ -43,6 +43,11 @@ export interface Store {
 
   listUsers(): Promise<User[]>
   createUser(u: User): Promise<void>
+  /**
+   * Delete every record. Only ever called by the seed endpoint, which refuses
+   * to run when any record carries provenance "live".
+   */
+  wipe(): Promise<void>
 }
 
 function id(prefix: string): string {
@@ -191,6 +196,15 @@ class MemoryStore implements Store {
     if (idx === -1) this.users.push(u)
     else this.users[idx] = u
   }
+  async wipe() {
+    this.dealers = []
+    this.projections = []
+    this.orders = []
+    this.campaigns = []
+    this.metrics = []
+    this.optimizations = []
+    this.users = []
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -233,7 +247,16 @@ class FirestoreStore implements Store {
   }
   async getDealer(i: string) { return this.one<Dealer>("dealers", i) }
   async createDealer(d: Omit<Dealer, "id" | "createdAt" | "updatedAt">) {
-    return this.add<Dealer>("dealers", { ...d, createdAt: now(), updatedAt: now() })
+    // Use the dealer code as the document id, matching the in-memory store.
+    // Auto-generated ids differ between the two, which meant an onboarding link
+    // built against one store 404'd against the other. A dealer code is already
+    // unique and is what appears in campaign names anyway.
+    const data = { ...d, createdAt: now(), updatedAt: now() }
+    if (!d.code) return this.add<Dealer>("dealers", data)
+
+    const id = stableId("dlr", d.code)
+    await this.col("dealers").doc(id).set(data, { merge: true })
+    return { id, ...data } as Dealer
   }
   async updateDealer(i: string, p: Partial<Dealer>) {
     return this.patch<Dealer>("dealers", i, { ...p, updatedAt: now() })
@@ -308,6 +331,19 @@ class FirestoreStore implements Store {
   async listUsers() { return this.all<User>("users") }
   async createUser(u: User) {
     await this.col("users").doc(u.id).set(u, { merge: true })
+  }
+  async wipe() {
+    for (const name of [
+      "dealers", "projections", "orders", "campaigns",
+      "metricsDaily", "optimizations", "users",
+    ]) {
+      // Firestore has no "delete collection"; batch through the documents.
+      let snap = await this.col(name).limit(400).get()
+      while (!snap.empty) {
+        await Promise.all(snap.docs.map((d: any) => d.ref.delete()))
+        snap = await this.col(name).limit(400).get()
+      }
+    }
   }
 }
 

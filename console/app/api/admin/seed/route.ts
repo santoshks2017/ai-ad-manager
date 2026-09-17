@@ -20,16 +20,42 @@ export async function POST(req: Request) {
 
   const store = await getStore()
   const existing = await store.listDealers()
+  const reset = new URL(req.url).searchParams.get("reset") === "true"
 
-  if (existing.length > 0) {
+  if (existing.length > 0 && !reset) {
     return NextResponse.json(
       {
-        error: "Store already has data. Seeding would duplicate it.",
+        error: "Store already has data. Seeding would duplicate it. Pass ?reset=true to replace it.",
         dealers: existing.length,
         mode: storeMode(),
       },
       { status: 409 },
     )
+  }
+
+  if (reset) {
+    // Hard guard: never destroy anything that came from a real platform API.
+    // Sample data is disposable; delivery data is not.
+    const [campaigns, metrics] = await Promise.all([
+      store.listCampaigns(),
+      store.listMetrics(),
+    ])
+    const live = [
+      ...campaigns.filter((c) => c.provenance === "live"),
+      ...metrics.filter((m) => m.provenance === "live"),
+    ]
+    if (live.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Refusing to reset: this store holds records from a real platform API. " +
+            "Reset only ever replaces sample data.",
+          liveRecords: live.length,
+        },
+        { status: 409 },
+      )
+    }
+    await store.wipe()
   }
 
   await seed(store)
