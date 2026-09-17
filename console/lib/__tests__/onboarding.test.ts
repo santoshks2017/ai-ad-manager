@@ -173,3 +173,41 @@ describe("grant health", () => {
     expect(health[0].state).toBe("invited")
   })
 })
+
+describe("records written before ownership existed", () => {
+  /**
+   * Firestore is schemaless, so dealer documents written before ownership and
+   * billing were added simply lack those fields. Reading them used to throw and
+   * took the whole page down in production. They are treated as what they
+   * actually were: agency-owned and agency-billed.
+   */
+  function legacyDealer(): Dealer {
+    const d = dealer()
+    delete (d.platform as Record<string, unknown>).google
+    delete (d.platform as Record<string, unknown>).meta
+    return d
+  }
+
+  it("does not throw on a record with no ownership fields", () => {
+    expect(() => onboardingSteps(legacyDealer())).not.toThrow()
+  })
+
+  it("treats a legacy record as agency-owned, so it asks the dealer for nothing", () => {
+    const steps = onboardingSteps(legacyDealer()).filter(
+      (s) => s.whyDealerMustDoIt !== null,
+    )
+    expect(steps).toHaveLength(0)
+  })
+
+  it("reports no grant problems for a legacy record", () => {
+    expect(() => grantHealth([legacyDealer()])).not.toThrow()
+    expect(grantHealth([legacyDealer()])).toHaveLength(0)
+  })
+
+  it("survives a record with no platform object at all", () => {
+    const d = dealer()
+    delete (d as Record<string, unknown>).platform
+    expect(() => onboardingSteps(d)).not.toThrow()
+    expect(() => grantHealth([d])).not.toThrow()
+  })
+})

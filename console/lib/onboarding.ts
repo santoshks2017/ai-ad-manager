@@ -24,7 +24,27 @@
  *     trusted.
  */
 
-import type { Dealer, GrantState, Platform } from "./types"
+import type { Dealer, GrantState, Platform, PlatformAccount } from "./types"
+
+/**
+ * Default account config for records written before ownership and billing
+ * existed on the model.
+ *
+ * Firestore has no schema, so older dealer documents simply lack these fields
+ * and reading them throws. Rather than a migration script that has to be run
+ * exactly once and in the right order, reads tolerate the older shape and
+ * treat it as what it actually was: agency-owned and agency-billed.
+ */
+const LEGACY_ACCOUNT: PlatformAccount = {
+  ownership: "agency_owned",
+  billing: "agency_billed",
+  grant: "not_requested",
+  lastVerifiedAt: null,
+}
+
+function account(dealer: Dealer, platform: Platform): PlatformAccount {
+  return dealer.platform?.[platform] ?? LEGACY_ACCOUNT
+}
 
 export type StepKind =
   | "create_google_account"
@@ -55,8 +75,10 @@ export interface OnboardingStep {
 export function onboardingSteps(dealer: Dealer): OnboardingStep[] {
   const steps: OnboardingStep[] = []
   const p = dealer.platform
+  const google = account(dealer, "google")
+  const meta = account(dealer, "meta")
 
-  if (p.google.ownership === "dealer_linked") {
+  if (google.ownership === "dealer_linked") {
     steps.push({
       kind: "create_google_account",
       platform: "google",
@@ -75,11 +97,11 @@ export function onboardingSteps(dealer: Dealer): OnboardingStep[] {
         "You will get a request from us inside Google Ads. Accept it, and we can run campaigns for you without you logging in again.",
       whyDealerMustDoIt:
         "Google requires the client to accept a manager link from their own account. We can send the invitation but cannot approve it ourselves.",
-      done: p.google.grant === "active",
+      done: google.grant === "active",
     })
   }
 
-  if (p.meta.ownership === "dealer_linked") {
+  if (meta.ownership === "dealer_linked") {
     steps.push({
       kind: "create_meta_portfolio",
       platform: "meta",
@@ -118,14 +140,14 @@ export function onboardingSteps(dealer: Dealer): OnboardingStep[] {
         "In Business Settings, go to Partners, choose 'Give a partner access to your assets', and enter our Business ID.",
       whyDealerMustDoIt:
         "Only the business that owns an asset can share it. We cannot grant ourselves access.",
-      done: p.meta.grant === "active",
+      done: meta.grant === "active",
     })
   }
 
-  if (p.google.billing === "agency_billed" || p.meta.billing === "agency_billed") {
+  if (google.billing === "agency_billed" || meta.billing === "agency_billed") {
     steps.push({
       kind: "share_payment_method",
-      platform: p.meta.billing === "agency_billed" ? "meta" : "google",
+      platform: meta.billing === "agency_billed" ? "meta" : "google",
       title: "Billing set to our account",
       dealerAction:
         "Nothing to do — we pay the platforms directly and invoice you separately.",
@@ -191,23 +213,23 @@ export function grantHealth(dealers: Dealer[]): {
 
   for (const dealer of dealers) {
     for (const platform of ["google", "meta"] as Platform[]) {
-      const account = dealer.platform[platform]
-      if (account.ownership !== "dealer_linked") continue
+      const acc = account(dealer, platform)
+      if (acc.ownership !== "dealer_linked") continue
 
       // Revoked is worse than expired: expired is a token to refresh, revoked
       // means the dealer or one of their staff actively removed us.
       const severity =
-        account.grant === "revoked" ? 100
-          : account.grant === "expired" ? 80
-          : account.grant === "invited" ? 40
+        acc.grant === "revoked" ? 100
+          : acc.grant === "expired" ? 80
+          : acc.grant === "invited" ? 40
           : 0
 
       if (severity > 0) {
         out.push({
           dealer,
           platform,
-          state: account.grant,
-          lastVerifiedAt: account.lastVerifiedAt,
+          state: acc.grant,
+          lastVerifiedAt: acc.lastVerifiedAt,
           severity,
         })
       }

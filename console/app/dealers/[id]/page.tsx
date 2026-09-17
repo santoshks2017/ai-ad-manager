@@ -138,14 +138,14 @@ export default async function DealerDetail({
               its own. We create and run all of it — the dealer never signs in.
             </p>
             <dl className="space-y-2.5 text-sm">
-              <Provision label="Google Ads account" state={dealer.platform.googleState} />
-              <Provision label="Google verification" state={dealer.platform.googleVerified ? "ready" : "not_started"} />
-              <Provision label="Meta Page + ad account" state={dealer.platform.metaState} />
-              <Provision label="Meta verification" state={dealer.platform.metaVerified ? "ready" : "not_started"} />
-              <Provision label="Services agreement" state={dealer.platform.servicesAgreementSigned ? "ready" : "blocked"} />
-              <Provision label="Legal documents" state={dealer.platform.legalDocsCollected ? "ready" : "not_started"} />
+              <Provision label="Google Ads account" state={dealer.platform?.googleState ?? "not_started"} />
+              <Provision label="Google verification" state={dealer.platform?.googleVerified ? "ready" : "not_started"} />
+              <Provision label="Meta Page + ad account" state={dealer.platform?.metaState ?? "not_started"} />
+              <Provision label="Meta verification" state={dealer.platform?.metaVerified ? "ready" : "not_started"} />
+              <Provision label="Services agreement" state={dealer.platform?.servicesAgreementSigned ? "ready" : "blocked"} />
+              <Provision label="Legal documents" state={dealer.platform?.legalDocsCollected ? "ready" : "not_started"} />
             </dl>
-            {!dealer.platform.servicesAgreementSigned && (
+            {!dealer.platform?.servicesAgreementSigned && (
               <p className="text-2xs text-alert mt-3">
                 The signed agreement is what authorises us to advertise as this dealer's
                 representative. Both platforms expect it. Campaigns should not go live

@@ -53,14 +53,14 @@ export async function POST(req: Request) {
   // without the signed agreement means advertising as someone's representative
   // without authorisation.
   const blockers: string[] = []
-  if (!dealer.platform.servicesAgreementSigned) {
+  if (!dealer.platform?.servicesAgreementSigned) {
     blockers.push("the services agreement is unsigned")
   }
   for (const p of body.platforms) {
-    if (p === "google" && dealer.platform.googleState !== "ready") {
+    if (p === "google" && dealer.platform?.googleState !== "ready") {
       blockers.push("the Google Ads account is not ready")
     }
-    if (p === "meta" && dealer.platform.metaState !== "ready") {
+    if (p === "meta" && dealer.platform?.metaState !== "ready") {
       blockers.push("the Meta Page and ad account are not ready")
     }
   }
@@ -86,8 +86,8 @@ export async function POST(req: Request) {
 
     const accountId =
       platform === "google"
-        ? dealer.platform.googleCustomerId
-        : dealer.platform.metaAdAccountId
+        ? dealer.platform?.googleCustomerId
+        : dealer.platform?.metaAdAccountId
 
     if (!accountId) {
       failures.push({ platform, error: "No ad account id on the dealer record." })

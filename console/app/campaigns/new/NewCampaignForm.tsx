@@ -30,10 +30,10 @@ export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
   const blockers = useMemo(() => {
     if (!dealer) return []
     const b: string[] = []
-    if (!dealer.platform.servicesAgreementSigned) b.push("Services agreement unsigned")
-    if (platforms.includes("google") && dealer.platform.googleState !== "ready")
+    if (!dealer.platform?.servicesAgreementSigned) b.push("Services agreement unsigned")
+    if (platforms.includes("google") && dealer.platform?.googleState !== "ready")
       b.push("Google Ads account not ready")
-    if (platforms.includes("meta") && dealer.platform.metaState !== "ready")
+    if (platforms.includes("meta") && dealer.platform?.metaState !== "ready")
       b.push("Meta Page and ad account not ready")
     return b
   }, [dealer, platforms])

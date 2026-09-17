@@ -38,9 +38,9 @@ export default async function Activations() {
             const dealer = dealers.find((d) => d.id === o.dealerId)
             const notReady =
               dealer &&
-              (!dealer.platform.servicesAgreementSigned ||
-                dealer.platform.googleState !== "ready" ||
-                dealer.platform.metaState !== "ready")
+              (!dealer.platform?.servicesAgreementSigned ||
+                dealer.platform?.googleState !== "ready" ||
+                dealer.platform?.metaState !== "ready")
             return (
               <div key={o.id} className="card p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -72,11 +72,11 @@ export default async function Activations() {
                       Platform accounts are not ready.
                     </span>{" "}
                     <span className="text-ink-soft">
-                      {!dealer?.platform.servicesAgreementSigned &&
+                      {!dealer?.platform?.servicesAgreementSigned &&
                         "The services agreement is unsigned — it is what authorises us to run ads as this dealer's representative. "}
-                      {dealer?.platform.googleState !== "ready" &&
+                      {dealer?.platform?.googleState !== "ready" &&
                         "Google client account still to be created. "}
-                      {dealer?.platform.metaState !== "ready" &&
+                      {dealer?.platform?.metaState !== "ready" &&
                         "Meta Page, Business Portfolio and ad account still to be created."}
                     </span>
                   </div>
