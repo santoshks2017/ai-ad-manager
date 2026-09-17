@@ -17,6 +17,8 @@
     background: var(--ground);
     color: var(--ink);
     font-family: "IBM Plex Sans", system-ui, sans-serif;
+    /* Wide data tables scroll inside their own container, never the page. */
+    overflow-x: hidden;
   }
   /* Every figure is tabular. A ledger's columns must align. */
   .num {

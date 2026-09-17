@@ -13,6 +13,12 @@ import type { NextRequest } from "next/server"
  * When ACCESS_PASSWORD is unset (local development) the gate is open.
  */
 export function middleware(req: NextRequest) {
+  // The scheduled scan is machine-to-machine and carries its own shared
+  // secret, so it does not go through the passphrase gate.
+  if (req.nextUrl.pathname === "/api/optimisations/scan") {
+    return NextResponse.next()
+  }
+
   const expected = process.env.ACCESS_PASSWORD
   if (!expected) return NextResponse.next()
 
