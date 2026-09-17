@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { Shell } from "@/components/Shell"
 import { getStore } from "@/lib/store"
 import { inr, inrShort, num, relativeDate } from "@/lib/format"
@@ -26,7 +27,15 @@ export default async function Campaigns() {
   const dealerFor = (id: string) => dealers.find((d) => d.id === id)
 
   return (
-    <Shell title="Campaigns" subtitle="Everything running across Google and Meta">
+    <Shell
+      title="Campaigns"
+      subtitle="Everything running across Google and Meta"
+      actions={
+        <Link href="/campaigns/new" className="btn-primary">
+          New campaign
+        </Link>
+      }
+    >
       <div className="sheet overflow-x-auto">
         <table className="w-full text-sm min-w-[900px]">
           <thead>

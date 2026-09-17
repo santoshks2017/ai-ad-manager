@@ -49,6 +49,19 @@ function id(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`
 }
 
+/**
+ * Stable id derived from a natural key.
+ *
+ * The in-memory store is constructed per module instance, and Next.js can load
+ * a route handler and a page in separate instances. With random ids the page
+ * rendered one set of dealers while the API held another, so every write from
+ * the UI failed with "not found". Deriving ids from the dealer code makes the
+ * seeded data identical in every instance, and makes the demo reproducible.
+ */
+function stableId(prefix: string, key: string): string {
+  return `${prefix}_${key.toLowerCase().replace(/[^a-z0-9]+/g, "")}`
+}
+
 const now = () => new Date().toISOString()
 
 // ---------------------------------------------------------------------------
@@ -71,7 +84,12 @@ class MemoryStore implements Store {
     return this.dealers.find((d) => d.id === i) ?? null
   }
   async createDealer(d: Omit<Dealer, "id" | "createdAt" | "updatedAt">) {
-    const rec: Dealer = { ...d, id: id("dlr"), createdAt: now(), updatedAt: now() }
+    const rec: Dealer = {
+      ...d,
+      id: d.code ? stableId("dlr", d.code) : id("dlr"),
+      createdAt: now(),
+      updatedAt: now(),
+    }
     this.dealers.push(rec)
     return rec
   }
@@ -120,7 +138,11 @@ class MemoryStore implements Store {
     return dealerId ? all.filter((c) => c.dealerId === dealerId) : all
   }
   async createCampaign(c: Omit<Campaign, "id" | "createdAt">) {
-    const rec: Campaign = { ...c, id: id("cmp"), createdAt: now() }
+    const rec: Campaign = {
+      ...c,
+      id: c.platformCampaignId ? stableId("cmp", c.platformCampaignId) : id("cmp"),
+      createdAt: now(),
+    }
     this.campaigns.unshift(rec)
     return rec
   }

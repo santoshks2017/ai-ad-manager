@@ -13,6 +13,17 @@ const config: Config = {
         alert: { DEFAULT: "#A8341F", soft: "#F7E7E3" },
         amber: { DEFAULT: "#B5801A", soft: "#FAF0DC" },
         accent: { DEFAULT: "#1B3A6B", soft: "#E6ECF5" },
+        // Data-mark colors, validated separately from the UI colors above.
+        // The UI greens/navies pass contrast but sit outside the lightness
+        // band and below the chroma floor for chart fills — they read muddy as
+        // large areas. These are lighter, more chromatic steps of the same hues.
+        viz: {
+          good: "#1E9973",
+          warn: "#C68A15",
+          bad: "#C2452A",
+          google: "#3B78D8",
+          meta: "#C2662A",
+        },
       },
       fontFamily: {
         display: ["Archivo", "system-ui", "sans-serif"],
