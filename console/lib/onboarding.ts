@@ -42,9 +42,11 @@ const LEGACY_ACCOUNT: PlatformAccount = {
   lastVerifiedAt: null,
 }
 
-function account(dealer: Dealer, platform: Platform): PlatformAccount {
+export function platformAccount(dealer: Dealer, platform: Platform): PlatformAccount {
   return dealer.platform?.[platform] ?? LEGACY_ACCOUNT
 }
+
+const account = platformAccount
 
 export type StepKind =
   | "create_google_account"

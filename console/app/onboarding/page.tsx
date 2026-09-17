@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { Shell } from "@/components/Shell"
 import { getStore } from "@/lib/store"
-import { grantHealth, onboardingProgress } from "@/lib/onboarding"
+import { grantHealth, onboardingProgress, platformAccount } from "@/lib/onboarding"
 import { relativeDate } from "@/lib/format"
 import { CopyLink } from "./CopyLink"
 import { onboardToken } from "@/lib/onboard-link"
@@ -12,10 +12,12 @@ export default async function Onboarding() {
   const store = await getStore()
   const dealers = await store.listDealers()
 
+  // Goes through platformAccount so records written before ownership existed
+  // are read as agency-owned rather than throwing.
   const delegated = dealers.filter(
     (d) =>
-      d.platform.google.ownership === "dealer_linked" ||
-      d.platform.meta.ownership === "dealer_linked",
+      platformAccount(d, "google").ownership === "dealer_linked" ||
+      platformAccount(d, "meta").ownership === "dealer_linked",
   )
   const needsAttention = grantHealth(dealers)
 

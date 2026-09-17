@@ -183,8 +183,8 @@ describe("records written before ownership existed", () => {
    */
   function legacyDealer(): Dealer {
     const d = dealer()
-    delete (d.platform as Record<string, unknown>).google
-    delete (d.platform as Record<string, unknown>).meta
+    delete (d.platform as unknown as Record<string, unknown>).google
+    delete (d.platform as unknown as Record<string, unknown>).meta
     return d
   }
 
@@ -206,7 +206,7 @@ describe("records written before ownership existed", () => {
 
   it("survives a record with no platform object at all", () => {
     const d = dealer()
-    delete (d as Record<string, unknown>).platform
+    delete (d as unknown as Record<string, unknown>).platform
     expect(() => onboardingSteps(d)).not.toThrow()
     expect(() => grantHealth([d])).not.toThrow()
   })
