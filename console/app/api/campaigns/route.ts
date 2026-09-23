@@ -17,6 +17,8 @@ const Body = z.object({
   endDate: z.string().nullable().default(null),
   headline: z.string().min(3).max(120),
   description: z.string().min(3).max(300),
+  offer: z.string().max(120).nullable().default(null),
+  goLive: z.boolean().default(false),
 })
 
 /**
@@ -77,6 +79,10 @@ export async function POST(req: Request) {
   const metaShare = body.metaSharePct / 100
   const created: Campaign[] = []
   const failures: { platform: Platform; error: string }[] = []
+  const builds: {
+    platform: Platform; keywordCount: number; negativeKeywordCount: number
+    adCount: number; status: string; warnings: string[]
+  }[] = []
 
   for (const platform of body.platforms as Platform[]) {
     const share =
@@ -109,6 +115,9 @@ export async function POST(req: Request) {
       virtualNumber: dealer.virtualNumber,
       headline: body.headline,
       description: body.description,
+      offer: body.offer,
+      goLive: body.goLive,
+      metaPageId: dealer.platform?.metaPageId ?? null,
     }
 
     const provider = getProvider(platform)
@@ -119,6 +128,15 @@ export async function POST(req: Request) {
       continue
     }
 
+    builds.push({
+      platform,
+      keywordCount: result.data.keywordCount,
+      negativeKeywordCount: result.data.negativeKeywordCount,
+      adCount: result.data.adCount,
+      status: result.data.status,
+      warnings: result.data.warnings,
+    })
+
     created.push(
       await store.createCampaign({
         dealerId: dealer.id,
@@ -127,14 +145,18 @@ export async function POST(req: Request) {
         name: result.data.name,
         objective: body.objective,
         dailyBudget,
-        // Providers create paused; the record reflects reality, not intent.
-        status: "paused",
+        // Reflect what the provider actually did, not what was asked for.
+        status: result.data.status,
         provenance: result.provenance,
         createdBy: "u_am1", // TODO: signed-in user once auth lands
       }),
     )
   }
 
+  // Warnings mean the campaign exists but something under it did not build.
+  const warnings = builds.flatMap((b) =>
+    b.warnings.map((w) => ({ platform: b.platform, warning: w })),
+  )
   const status = created.length === 0 ? 502 : failures.length > 0 ? 207 : 201
-  return NextResponse.json({ created, failures }, { status })
+  return NextResponse.json({ created, failures, warnings, builds }, { status })
 }

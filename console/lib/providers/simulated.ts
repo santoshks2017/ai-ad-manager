@@ -11,11 +11,12 @@
  */
 
 import { baseCpl, cityTier, modelSegment, objectiveMultiplier } from "../benchmarks"
+import { googleAssets, metaAssets } from "../creative"
 import type { Platform } from "../types"
 import {
   campaignName,
   type AdProvider,
-  type CampaignRef,
+  type BuiltCampaign,
   type CreateCampaignInput,
   type MetricsRow,
   type ProviderResult,
@@ -56,10 +57,34 @@ export class SimulatedProvider implements AdProvider {
   async createCampaign(
     accountId: string,
     input: CreateCampaignInput,
-  ): Promise<ProviderResult<CampaignRef>> {
+  ): Promise<ProviderResult<BuiltCampaign>> {
     const name = campaignName(input)
     const id = `sim-${this.platform}-${hash(`${accountId}${name}`).toString(36)}`
-    return this.ok({ platformCampaignId: id, name })
+    const assets =
+      this.platform === "google"
+        ? googleAssets({
+            dealerName: input.dealerName, brand: input.brand, model: input.model,
+            city: input.city, objective: input.objective, offer: input.offer,
+          })
+        : null
+    const meta =
+      this.platform === "meta"
+        ? metaAssets({
+            dealerName: input.dealerName, brand: input.brand, model: input.model,
+            city: input.city, objective: input.objective, offer: input.offer,
+          })
+        : null
+
+    return this.ok({
+      platformCampaignId: id,
+      name,
+      adGroupId: `${id}-ag`,
+      keywordCount: assets?.keywords.length ?? 0,
+      negativeKeywordCount: assets?.negativeKeywords.length ?? 0,
+      adCount: assets ? 1 : (meta?.primaryTexts.length ?? 0),
+      status: input.goLive ? "active" : "paused",
+      warnings: [],
+    })
   }
 
   async pauseCampaign(): Promise<ProviderResult<null>> {

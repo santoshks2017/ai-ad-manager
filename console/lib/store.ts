@@ -195,7 +195,15 @@ class MemoryStore implements Store {
     return status ? all.filter((o) => o.status === status) : all
   }
   async createOptimization(o: Omit<Optimization, "id" | "createdAt">) {
-    const rec: Optimization = { ...o, id: id("opt"), createdAt: now() }
+    // Derived from campaign + kind, which is already the scan's dedupe key.
+    // Random ids broke writes from the UI: Next can load a page and a route
+    // handler in separate module instances, so the page listed one set of ids
+    // and the API held another.
+    const rec: Optimization = {
+      ...o,
+      id: stableId("opt", `${o.campaignId}-${o.kind}`),
+      createdAt: now(),
+    }
     this.optimizations.unshift(rec)
     return rec
   }

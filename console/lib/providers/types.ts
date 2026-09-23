@@ -38,6 +38,29 @@ export interface CreateCampaignInput {
   virtualNumber: string | null
   headline: string
   description: string
+  /**
+   * Go live on creation instead of staying paused.
+   *
+   * Default is paused. Spend cannot be unwound, so the safe default is that a
+   * human looks before anything serves. Callers that genuinely want hands-off
+   * activation opt in explicitly.
+   */
+  goLive?: boolean
+  /** Optional offer line used in generated ad copy. */
+  offer?: string | null
+  /** The showroom's own Facebook Page. Meta ads cannot run without one. */
+  metaPageId?: string | null
+}
+
+/** What a full build actually created, so the UI can report it honestly. */
+export interface BuiltCampaign extends CampaignRef {
+  adGroupId: string | null
+  keywordCount: number
+  negativeKeywordCount: number
+  adCount: number
+  status: "active" | "paused"
+  /** Steps that failed after the campaign itself was created. */
+  warnings: string[]
 }
 
 export interface ProviderResult<T> {
@@ -72,10 +95,17 @@ export interface AdProvider {
    */
   isConfigured(): boolean
 
+  /**
+   * Create the campaign and everything under it — targeting, ad group,
+   * keywords, negatives and ads — in one call.
+   *
+   * A campaign object on its own serves nothing. Returning "created" for an
+   * empty shell would be reporting success for work that has not happened.
+   */
   createCampaign(
     accountId: string,
     input: CreateCampaignInput,
-  ): Promise<ProviderResult<CampaignRef>>
+  ): Promise<ProviderResult<BuiltCampaign>>
 
   pauseCampaign(accountId: string, campaignId: string): Promise<ProviderResult<null>>
   resumeCampaign(accountId: string, campaignId: string): Promise<ProviderResult<null>>

@@ -18,11 +18,12 @@
  * exempts "internal use only" tools.
  */
 
+import { googleAssets, taggedLandingUrl } from "../creative"
 import type { Platform } from "../types"
 import {
   campaignName,
   type AdProvider,
-  type CampaignRef,
+  type BuiltCampaign,
   type CreateCampaignInput,
   type MetricsRow,
   type ProviderResult,
@@ -90,20 +91,34 @@ export class GoogleAdsProvider implements AdProvider {
   }
 
   /**
-   * Creates a budget, then a paused campaign against it.
+   * Build the whole campaign: budget, campaign, location targeting, ad group,
+   * keywords, negative keywords and a responsive search ad.
    *
-   * Campaigns are created PAUSED on purpose. A campaign that goes live the
-   * instant it is created can start spending before anyone has checked the
-   * targeting, and unwinding spend is not possible.
+   * Ordering matters — each step needs the resource name from the one before,
+   * so this cannot be parallelised. If a later step fails the campaign is left
+   * in place and the failure is returned as a warning rather than silently
+   * swallowed: a half-built campaign someone can finish beats a deleted one
+   * nobody knows about.
+   *
+   * Created paused unless `goLive` is set. Spend cannot be unwound.
    */
   async createCampaign(
     accountId: string,
     input: CreateCampaignInput,
-  ): Promise<ProviderResult<CampaignRef>> {
-    if (!this.isConfigured()) return this.notConfigured<CampaignRef>()
+  ): Promise<ProviderResult<BuiltCampaign>> {
+    if (!this.isConfigured()) return this.notConfigured<BuiltCampaign>()
 
     const customerId = accountId.replace(/-/g, "")
     const name = campaignName(input)
+    const warnings: string[] = []
+    const assets = googleAssets({
+      dealerName: input.dealerName,
+      brand: input.brand,
+      model: input.model,
+      city: input.city,
+      objective: input.objective,
+      offer: input.offer,
+    })
 
     const budgetRes = await this.post<{ results?: { resourceName: string }[] }>(
       `/customers/${customerId}/campaignBudgets:mutate`,
@@ -120,11 +135,10 @@ export class GoogleAdsProvider implements AdProvider {
         ],
       },
     )
-    if (!budgetRes.ok) return this.fail<CampaignRef>(budgetRes.error!)
-
+    if (!budgetRes.ok) return this.fail<BuiltCampaign>(budgetRes.error!)
     const budgetResource = budgetRes.data?.results?.[0]?.resourceName
     if (!budgetResource) {
-      return this.fail<CampaignRef>("Google Ads returned no budget resource name.")
+      return this.fail<BuiltCampaign>("Google Ads returned no budget resource name.")
     }
 
     const campaignRes = await this.post<{ results?: { resourceName: string }[] }>(
@@ -134,16 +148,21 @@ export class GoogleAdsProvider implements AdProvider {
           {
             create: {
               name,
-              status: "PAUSED",
+              status: input.goLive ? "ENABLED" : "PAUSED",
               advertisingChannelType: "SEARCH",
               campaignBudget: budgetResource,
-              // Lead generation: bid to acquisition cost, not clicks.
               maximizeConversions: {},
               networkSettings: {
                 targetGoogleSearch: true,
                 targetSearchNetwork: true,
                 targetContentNetwork: false,
                 targetPartnerSearchNetwork: false,
+              },
+              // Only show to people actually in the area, not people merely
+              // searching about it — a dealer cannot sell to the latter.
+              geoTargetTypeSetting: {
+                positiveGeoTargetType: "PRESENCE",
+                negativeGeoTargetType: "PRESENCE",
               },
               startDate: input.startDate.replace(/-/g, ""),
               ...(input.endDate ? { endDate: input.endDate.replace(/-/g, "") } : {}),
@@ -152,16 +171,130 @@ export class GoogleAdsProvider implements AdProvider {
         ],
       },
     )
-    if (!campaignRes.ok) return this.fail<CampaignRef>(campaignRes.error!)
-
-    const resourceName = campaignRes.data?.results?.[0]?.resourceName
-    if (!resourceName) {
-      return this.fail<CampaignRef>("Google Ads returned no campaign resource name.")
+    if (!campaignRes.ok) return this.fail<BuiltCampaign>(campaignRes.error!)
+    const campaignResource = campaignRes.data?.results?.[0]?.resourceName
+    if (!campaignResource) {
+      return this.fail<BuiltCampaign>("Google Ads returned no campaign resource name.")
     }
+    const campaignId = campaignResource.split("/").pop()!
+
+    // Radius around the showroom, plus the negative keyword list. Both are
+    // campaign-level criteria so they go in one mutate.
+    const criteria: unknown[] = [
+      {
+        create: {
+          campaign: campaignResource,
+          proximity: {
+            radius: input.radiusKm,
+            radiusUnits: "KILOMETERS",
+            address: { cityName: input.city, countryCode: "IN" },
+          },
+        },
+      },
+      ...assets.negativeKeywords.map((text) => ({
+        create: {
+          campaign: campaignResource,
+          negative: true,
+          keyword: { text, matchType: "PHRASE" },
+        },
+      })),
+    ]
+    const criteriaRes = await this.post<unknown>(
+      `/customers/${customerId}/campaignCriteria:mutate`,
+      { operations: criteria },
+    )
+    if (!criteriaRes.ok) {
+      warnings.push(`Targeting and negative keywords failed: ${criteriaRes.error}`)
+    }
+
+    const adGroupRes = await this.post<{ results?: { resourceName: string }[] }>(
+      `/customers/${customerId}/adGroups:mutate`,
+      {
+        operations: [
+          {
+            create: {
+              name: `${input.model} — ${input.objective}`,
+              campaign: campaignResource,
+              status: input.goLive ? "ENABLED" : "PAUSED",
+              type: "SEARCH_STANDARD",
+            },
+          },
+        ],
+      },
+    )
+    if (!adGroupRes.ok) {
+      return {
+        ok: true,
+        data: {
+          platformCampaignId: campaignId, name, adGroupId: null,
+          keywordCount: 0, negativeKeywordCount: assets.negativeKeywords.length,
+          adCount: 0, status: input.goLive ? "active" : "paused",
+          warnings: [...warnings, `Ad group failed: ${adGroupRes.error}`],
+        },
+        error: null,
+        provenance: this.provenance,
+      }
+    }
+    const adGroupResource = adGroupRes.data!.results![0].resourceName
+    const adGroupId = adGroupResource.split("/").pop()!
+
+    const keywordRes = await this.post<unknown>(
+      `/customers/${customerId}/adGroupCriteria:mutate`,
+      {
+        operations: assets.keywords.map((k) => ({
+          create: {
+            adGroup: adGroupResource,
+            status: "ENABLED",
+            keyword: { text: k.text, matchType: k.matchType },
+          },
+        })),
+      },
+    )
+    if (!keywordRes.ok) warnings.push(`Keywords failed: ${keywordRes.error}`)
+
+    const finalUrl = taggedLandingUrl(input.landingPageUrl, {
+      platform: "google",
+      dealerCode: input.dealerCode,
+      model: input.model,
+      objective: input.objective,
+    })
+
+    const adRes = await this.post<unknown>(
+      `/customers/${customerId}/adGroupAds:mutate`,
+      {
+        operations: [
+          {
+            create: {
+              adGroup: adGroupResource,
+              status: input.goLive ? "ENABLED" : "PAUSED",
+              ad: {
+                finalUrls: [finalUrl],
+                responsiveSearchAd: {
+                  headlines: assets.headlines.map((text) => ({ text })),
+                  descriptions: assets.descriptions.map((text) => ({ text })),
+                  path1: assets.path1,
+                  path2: assets.path2,
+                },
+              },
+            },
+          },
+        ],
+      },
+    )
+    if (!adRes.ok) warnings.push(`Ad creation failed: ${adRes.error}`)
 
     return {
       ok: true,
-      data: { platformCampaignId: resourceName.split("/").pop()!, name },
+      data: {
+        platformCampaignId: campaignId,
+        name,
+        adGroupId,
+        keywordCount: keywordRes.ok ? assets.keywords.length : 0,
+        negativeKeywordCount: criteriaRes.ok ? assets.negativeKeywords.length : 0,
+        adCount: adRes.ok ? 1 : 0,
+        status: input.goLive ? "active" : "paused",
+        warnings,
+      },
       error: null,
       provenance: this.provenance,
     }

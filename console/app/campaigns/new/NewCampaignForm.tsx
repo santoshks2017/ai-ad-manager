@@ -19,11 +19,17 @@ export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
   const [radiusKm, setRadiusKm] = useState(25)
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
   const [headline, setHeadline] = useState("")
+  const [offer, setOffer] = useState("")
+  const [goLive, setGoLive] = useState(true)
   const [description, setDescription] = useState("")
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<{ created: number; failures: { platform: string; error: string }[] } | null>(null)
+  const [result, setResult] = useState<{
+    created: number
+    failures: { platform: string; error: string }[]
+    builds: { platform: string; keywordCount: number; negativeKeywordCount: number; adCount: number; status: string; warnings: string[] }[]
+  } | null>(null)
 
   const dealer = eligible.find((d) => d.id === dealerId)
 
@@ -63,13 +69,19 @@ export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
           radiusKm, startDate, endDate: null,
           headline: headline || autoHeadline,
           description: description || autoDescription,
+          offer: offer || null,
+          goLive,
         }),
       })
       const data = await res.json()
       if (!res.ok && res.status !== 207) {
         setError(data.error ?? "Could not create the campaign.")
       } else {
-        setResult({ created: data.created?.length ?? 0, failures: data.failures ?? [] })
+        setResult({
+          created: data.created?.length ?? 0,
+          failures: data.failures ?? [],
+          builds: data.builds ?? [],
+        })
         router.refresh()
       }
     } catch {
@@ -200,6 +212,15 @@ export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
         </div>
 
         <div>
+          <label className="label" htmlFor="offer">Offer (optional)</label>
+          <input
+            id="offer" className="field" maxLength={120} value={offer}
+            onChange={(e) => setOffer(e.target.value)}
+            placeholder="Exchange bonus up to ₹40,000"
+          />
+        </div>
+
+        <div>
           <label className="label" htmlFor="headline">Headline</label>
           <input
             id="headline" className="field" maxLength={120}
@@ -224,15 +245,32 @@ export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
           </div>
         )}
 
+        <label className="flex items-start gap-2.5 cursor-pointer">
+          <input
+            type="checkbox" checked={goLive}
+            onChange={(e) => setGoLive(e.target.checked)}
+            className="mt-0.5 accent-[#008075]"
+          />
+          <span className="text-sm">
+            <span className="font-medium">Go live immediately</span>
+            <span className="block text-2xs text-ink-faent text-ink-faint mt-0.5">
+              Starts serving as soon as it is built. Leave unticked to create it paused
+              and review the targeting first.
+            </span>
+          </span>
+        </label>
+
         <button
           type="submit" className="btn-primary w-full"
           disabled={busy || blockers.length > 0}
         >
-          {busy ? "Creating…" : "Create paused campaign"}
+          {busy ? "Building…" : goLive ? "Build and go live" : "Build, leave paused"}
         </button>
         <p className="text-2xs text-ink-faint">
-          Campaigns are created paused on every platform. Nothing spends until someone
-          reviews the targeting and starts it.
+          Keywords, negative keywords and ads are generated and pushed with the campaign.
+          {goLive
+            ? " This will start spending money as soon as the platforms approve it."
+            : " Nothing spends until someone starts it."}
         </p>
       </form>
 
@@ -252,8 +290,20 @@ export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
             }`}
           >
             <div className="font-medium">
-              {result.created} campaign{result.created === 1 ? "" : "s"} created, paused.
+              {result.created} campaign{result.created === 1 ? "" : "s"} built
+              {result.builds.some((b) => b.status === "active") ? " and live" : ", paused"}.
             </div>
+            {result.builds.map((b) => (
+              <div key={b.platform} className="text-ink-soft mt-1 num text-2xs">
+                <span className="capitalize font-medium">{b.platform}</span>:{" "}
+                {b.adCount} ad{b.adCount === 1 ? "" : "s"}
+                {b.keywordCount > 0 && `, ${b.keywordCount} keywords`}
+                {b.negativeKeywordCount > 0 && `, ${b.negativeKeywordCount} negatives`}
+              </div>
+            ))}
+            {result.builds.flatMap((b) => b.warnings).map((w, i) => (
+              <div key={i} className="text-amber mt-1 text-2xs">{w}</div>
+            ))}
             {result.failures.map((f) => (
               <div key={f.platform} className="text-ink-soft mt-1">
                 <span className="capitalize font-medium">{f.platform}</span> failed: {f.error}

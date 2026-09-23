@@ -23,11 +23,12 @@
  * so lead retrieval is a data-loss deadline, not a feature.
  */
 
+import { metaAssets, taggedLandingUrl } from "../creative"
 import type { Platform } from "../types"
 import {
   campaignName,
   type AdProvider,
-  type CampaignRef,
+  type BuiltCampaign,
   type CreateCampaignInput,
   type MetricsRow,
   type ProviderResult,
@@ -102,37 +103,139 @@ export class MetaAdsProvider implements AdProvider {
   }
 
   /**
-   * Creates the campaign only. Ad sets and ads are separate calls that need the
-   * dealer's Page ID and a lead form, so campaign creation intentionally stops
-   * at the campaign object and leaves the rest to an explicit build step.
+   * Build the campaign, its ad set and a live ad.
    *
-   * Created PAUSED so nothing spends before the targeting has been reviewed.
+   * Meta needs three objects, not one: the campaign carries the objective, the
+   * ad set carries budget, targeting and the promoted Page, and the ad carries
+   * the creative. A campaign on its own delivers nothing.
+   *
+   * The Page is required and must be the SHOWROOM's own — Meta requires an ad
+   * to represent the business being advertised, so a CarDekho Page here would
+   * be a policy breach as well as confusing to the buyer.
    */
   async createCampaign(
     accountId: string,
     input: CreateCampaignInput,
-  ): Promise<ProviderResult<CampaignRef>> {
-    if (!this.isConfigured()) return this.notConfigured<CampaignRef>()
+  ): Promise<ProviderResult<BuiltCampaign>> {
+    if (!this.isConfigured()) return this.notConfigured<BuiltCampaign>()
+    if (!input.metaPageId) {
+      return this.fail<BuiltCampaign>(
+        "No Facebook Page on the showroom record. Meta ads must run from a Page " +
+          "that represents the advertised business, so this cannot be created yet.",
+      )
+    }
 
     const act = accountId.startsWith("act_") ? accountId : `act_${accountId}`
     const name = campaignName(input)
+    const warnings: string[] = []
+    const assets = metaAssets({
+      dealerName: input.dealerName, brand: input.brand, model: input.model,
+      city: input.city, objective: input.objective, offer: input.offer,
+    })
 
-    const res = await this.request<{ id?: string }>(`/${act}/campaigns`, "POST", {
+    const campaignRes = await this.request<{ id?: string }>(`/${act}/campaigns`, "POST", {
       name,
       objective: OBJECTIVE_MAP[input.objective],
-      status: "PAUSED",
+      status: input.goLive ? "ACTIVE" : "PAUSED",
       special_ad_categories: JSON.stringify([]),
       buying_type: "AUCTION",
-      daily_budget: toMinor(input.dailyBudget),
     })
-    if (!res.ok) return this.fail<CampaignRef>(res.error!)
+    if (!campaignRes.ok) return this.fail<BuiltCampaign>(campaignRes.error!)
+    const campaignId = campaignRes.data?.id
+    if (!campaignId) return this.fail<BuiltCampaign>("Meta returned no campaign id.")
 
-    const id = res.data?.id
-    if (!id) return this.fail<CampaignRef>("Meta returned no campaign id.")
+    const adSetRes = await this.request<{ id?: string }>(`/${act}/adsets`, "POST", {
+      name: `${input.model} — ${input.city}`,
+      campaign_id: campaignId,
+      daily_budget: toMinor(input.dailyBudget),
+      billing_event: "IMPRESSIONS",
+      optimization_goal: "LEAD_GENERATION",
+      bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+      status: input.goLive ? "ACTIVE" : "PAUSED",
+      promoted_object: JSON.stringify({ page_id: input.metaPageId }),
+      targeting: JSON.stringify({
+        geo_locations: {
+          custom_locations: [
+            { latitude: 0, longitude: 0, radius: input.radiusKm, distance_unit: "kilometer" },
+          ],
+        },
+        age_min: 22,
+        age_max: 60,
+        // Meta needs a placement set or it spreads across everything.
+        publisher_platforms: ["facebook", "instagram"],
+      }),
+      start_time: new Date(input.startDate).toISOString(),
+      ...(input.endDate ? { end_time: new Date(input.endDate).toISOString() } : {}),
+    })
+    if (!adSetRes.ok) {
+      return {
+        ok: true,
+        data: {
+          platformCampaignId: campaignId, name, adGroupId: null,
+          keywordCount: 0, negativeKeywordCount: 0, adCount: 0,
+          status: input.goLive ? "active" : "paused",
+          warnings: [`Ad set failed: ${adSetRes.error}`],
+        },
+        error: null,
+        provenance: this.provenance,
+      }
+    }
+    const adSetId = adSetRes.data!.id!
+
+    const link = taggedLandingUrl(input.landingPageUrl, {
+      platform: "meta",
+      dealerCode: input.dealerCode,
+      model: input.model,
+      objective: input.objective,
+    })
+
+    const creativeRes = await this.request<{ id?: string }>(`/${act}/adcreatives`, "POST", {
+      name: `${name}__creative`,
+      object_story_spec: JSON.stringify({
+        page_id: input.metaPageId,
+        link_data: {
+          link,
+          message: assets.primaryTexts[0],
+          name: assets.headlines[0],
+          description: assets.description,
+          call_to_action: { type: assets.callToAction, value: { link } },
+        },
+      }),
+    })
+    if (!creativeRes.ok) {
+      warnings.push(`Creative failed: ${creativeRes.error}`)
+      return {
+        ok: true,
+        data: {
+          platformCampaignId: campaignId, name, adGroupId: adSetId,
+          keywordCount: 0, negativeKeywordCount: 0, adCount: 0,
+          status: input.goLive ? "active" : "paused", warnings,
+        },
+        error: null,
+        provenance: this.provenance,
+      }
+    }
+
+    const adRes = await this.request<{ id?: string }>(`/${act}/ads`, "POST", {
+      name: `${input.model} — ${input.objective}`,
+      adset_id: adSetId,
+      creative: JSON.stringify({ creative_id: creativeRes.data!.id }),
+      status: input.goLive ? "ACTIVE" : "PAUSED",
+    })
+    if (!adRes.ok) warnings.push(`Ad failed: ${adRes.error}`)
 
     return {
       ok: true,
-      data: { platformCampaignId: id, name },
+      data: {
+        platformCampaignId: campaignId,
+        name,
+        adGroupId: adSetId,
+        keywordCount: 0,
+        negativeKeywordCount: 0,
+        adCount: adRes.ok ? 1 : 0,
+        status: input.goLive ? "active" : "paused",
+        warnings,
+      },
       error: null,
       provenance: this.provenance,
     }
