@@ -114,7 +114,7 @@ export function LineChart({
           </g>
         ))}
 
-        <path d={path} fill="none" stroke="#3B78D8" strokeWidth={2}
+        <path d={path} fill="none" stroke="#1E9973" strokeWidth={2}
               strokeLinejoin="round" strokeLinecap="round" />
 
         {/* Invisible hit targets, wider than the marks. */}
@@ -138,7 +138,7 @@ export function LineChart({
             />
             {/* Surface ring keeps the marker legible over the line. */}
             <circle cx={x(hover)} cy={y(real[hover].value)} r={5}
-                    fill="#3B78D8" stroke="#FFFFFF" strokeWidth={2} />
+                    fill="#1E9973" stroke="#FFFFFF" strokeWidth={2} />
           </g>
         )}
 

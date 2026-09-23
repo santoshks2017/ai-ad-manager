@@ -192,7 +192,7 @@ describe("pacing", () => {
   })
 
   it("ignores dealers who are not active", () => {
-    expect(pacing([dealer("d1", { status: "prospect" })], [], NOW)).toHaveLength(0)
+    expect(pacing([dealer("d1", { status: "pending_connection" })], [], NOW)).toHaveLength(0)
   })
 })
 

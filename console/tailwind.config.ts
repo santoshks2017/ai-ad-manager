@@ -12,7 +12,10 @@ const config: Config = {
         signal: { DEFAULT: "#0A5D46", soft: "#E3F0EB" },
         alert: { DEFAULT: "#A8341F", soft: "#F7E7E3" },
         amber: { DEFAULT: "#B5801A", soft: "#FAF0DC" },
-        accent: { DEFAULT: "#1B3A6B", soft: "#E6ECF5" },
+        // CarDekho NCBD brand. Carried over from the existing Showrooms
+        // Console so this reads as the same product, not a second one.
+        accent: { DEFAULT: "#008075", soft: "#EAF5F5", dark: "#00665C", light: "#00A294" },
+        ember: { DEFAULT: "#FF6F00", soft: "#FFF1E3", dark: "#E65C00" },
         // Data-mark colors, validated separately from the UI colors above.
         // The UI greens/navies pass contrast but sit outside the lightness
         // band and below the chroma floor for chart fills — they read muddy as

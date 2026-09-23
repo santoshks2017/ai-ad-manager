@@ -59,7 +59,7 @@ export interface Dealer {
   virtualNumber: string | null
   landingPageUrl: string | null
   lmsAccountRef: string | null
-  status: "prospect" | "active" | "paused" | "churned"
+  status: ShowroomStatus
   ownerId: string | null
   /**
    * Platform assets provisioned BY US, on the dealer's behalf.
@@ -76,6 +76,38 @@ export interface Dealer {
   platform: PlatformAssets
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * Where a showroom sits in the acquisition and delivery pipeline.
+ *
+ * Carried over from the Dealer Campaign Portal prototype, which gets the motion
+ * right: we do not ask a dealer to hand over campaign management cold. We ask
+ * for READ-ONLY access first, audit what they are already spending, show them
+ * the waste, and convert on that evidence.
+ *
+ * Two things make this worth adopting over a plain prospect/active flag:
+ *  - The ask is small, so more dealers say yes.
+ *  - The audit reads their real historical CPL, which is precisely the data the
+ *    quote engine needs to stop relying on category benchmarks.
+ */
+export type ShowroomStatus =
+  | "pending_connection"  // invited; has not linked their Google Ads yet
+  | "pending_audit"       // read-only access granted, audit running
+  | "audit_ready"         // findings available, not yet shared with the dealer
+  | "audit_shared"        // dealer has seen the waste report, deciding
+  | "active"              // campaigns live
+  | "paused"
+  | "churned"
+
+export const SHOWROOM_STATUS_LABEL: Record<ShowroomStatus, string> = {
+  pending_connection: "Awaiting account link",
+  pending_audit: "Audit running",
+  audit_ready: "Audit ready to share",
+  audit_shared: "Awaiting decision",
+  active: "Live",
+  paused: "Paused",
+  churned: "Churned",
 }
 
 export type ProvisionState = "not_started" | "in_progress" | "ready" | "blocked"
@@ -307,4 +339,52 @@ export interface Benchmark {
   sampleSize: number
   source: string
   updatedAt: string
+}
+
+
+/* ------------------------------------------------------------------ Audit */
+
+export type AuditSeverity = "high" | "medium" | "low"
+
+export type AuditCheck =
+  | "no_negative_keywords"
+  | "broad_match_waste"
+  | "no_conversion_tracking"
+  | "single_ad_group"
+  | "budget_underpacing"
+  | "weak_ad_copy"
+  | "irrelevant_search_terms"
+  | "no_location_targeting"
+
+export interface AuditFinding {
+  check: AuditCheck
+  severity: AuditSeverity
+  title: string
+  /** What we found, in the dealer's language — this goes in front of them. */
+  finding: string
+  recommendation: string
+  /** Estimated monthly spend currently going nowhere, in rupees. */
+  estimatedMonthlyWaste: number
+  /** How sure we are. A guess presented as a finding is how trust is lost. */
+  confidence: Confidence
+}
+
+export interface Audit {
+  id: string
+  dealerId: string
+  /** The read-only Google Ads account we audited. */
+  googleCustomerId: string | null
+  periodDays: number
+  observedSpend: number
+  observedLeads: number
+  observedCpl: number | null
+  findings: AuditFinding[]
+  totalEstimatedWaste: number
+  /** Waste as a share of observed spend. The number sales leads with. */
+  wastePercent: number
+  provenance: Provenance
+  status: "running" | "ready" | "shared"
+  createdAt: string
+  sharedAt: string | null
+  createdBy: string
 }

@@ -8,6 +8,7 @@
 
 import type { Store } from "./store"
 import type { Campaign, Dealer, MetricsDaily, Optimization, Order, User } from "./types"
+import { runAudit } from "./audit"
 
 const iso = (daysAgo: number) =>
   new Date(Date.now() - daysAgo * 86_400_000).toISOString()
@@ -144,7 +145,7 @@ const DEALERS: Omit<Dealer, "id" | "createdAt" | "updatedAt">[] = [
     code: "MGNTOY", name: "Magnum Toyota", city: "Indore", state: "Madhya Pradesh",
     brands: ["Toyota"], models: ["Innova Hycross", "Fortuner", "Glanza"],
     monthlyBudget: 75_000, committedCpl: null, virtualNumber: null,
-    landingPageUrl: null, lmsAccountRef: null, status: "prospect", ownerId: "u_am2",
+    landingPageUrl: null, lmsAccountRef: null, status: "audit_ready", ownerId: "u_am2",
     platform: assets({ agreement: false, docs: false, code: "mgntoy" }),
   },
 ]
@@ -283,4 +284,41 @@ export async function seed(store: Store): Promise<void> {
     },
   ]
   for (const p of proposals) await store.createOptimization(p)
+
+  // The prospect showroom has a finished audit waiting to be shared.
+  const prospect = dealers.find((d) => d.status === "audit_ready")
+  if (prospect) await seedAudit(store, prospect.id)
+}
+
+/**
+ * A completed audit for the prospect showroom.
+ *
+ * This is the acquisition motion: read-only access first, audit their existing
+ * spend, show the waste, convert on the evidence. Deliberately a messy account,
+ * because a tidy one would not illustrate the point.
+ */
+export async function seedAudit(store: {
+  createAudit: (a: any) => Promise<any>
+}, dealerId: string): Promise<void> {
+  const audit = runAudit({
+    dealerId,
+    googleCustomerId: "482-990-1288",
+    periodDays: 30,
+    spend: 96_400,
+    leads: 118,
+    clicks: 3_140,
+    impressions: 121_000,
+    campaignCount: 2,
+    adGroupCount: 2,
+    negativeKeywordCount: 0,
+    broadMatchSpendShare: 0.71,
+    conversionTrackingConfigured: false,
+    locationTargetingConfigured: true,
+    zeroConversionSearchTermSpend: 27_800,
+    weakAdCount: 5,
+    totalAdCount: 6,
+    monthlyBudget: 100_000,
+    provenance: "simulated",
+  })
+  await store.createAudit(audit)
 }

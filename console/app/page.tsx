@@ -3,6 +3,7 @@ import { Shell } from "@/components/Shell"
 import { CplBar } from "@/components/CplBar"
 import { getStore } from "@/lib/store"
 import { inr, inrShort, num } from "@/lib/format"
+import { SHOWROOM_STATUS_LABEL } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
 
@@ -36,8 +37,8 @@ export default async function DealerBook() {
 
   return (
     <Shell
-      title="Dealer book"
-      subtitle="Last 30 days across all active dealers"
+      title="Showroom book"
+      subtitle="Last 30 days across every showroom we run"
       actions={
         <Link href="/quote" className="btn-primary">
           New quote
@@ -72,7 +73,7 @@ export default async function DealerBook() {
         <table className="w-full text-sm min-w-[860px]">
           <thead>
             <tr className="text-left">
-              <Th>Dealer</Th>
+              <Th>Showroom</Th>
               <Th>City</Th>
               <Th align="right">Budget/mo</Th>
               <Th align="right">Spend 30d</Th>
@@ -173,16 +174,21 @@ function Th({
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
     active: "bg-signal-soft text-signal border-signal/20",
-    prospect: "bg-accent-soft text-accent border-accent/20",
+    pending_connection: "bg-ground text-ink-soft border-rule",
+    pending_audit: "bg-accent-soft text-accent border-accent/20",
+    audit_ready: "bg-ember-soft text-ember-dark border-ember/30",
+    audit_shared: "bg-ember-soft text-ember-dark border-ember/30",
     paused: "bg-amber-soft text-amber border-amber/25",
     churned: "bg-ground text-ink-faint border-rule",
   }
+  const label =
+    (SHOWROOM_STATUS_LABEL as Record<string, string>)[status] ?? status
   return (
     <span
       className={`inline-block px-2 py-0.5 text-2xs uppercase tracking-[0.1em]
-                  font-medium border ${map[status] ?? map.churned}`}
+                  font-medium border whitespace-nowrap ${map[status] ?? map.churned}`}
     >
-      {status}
+      {label}
     </span>
   )
 }

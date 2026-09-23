@@ -27,7 +27,7 @@
     font-feature-settings: "tnum" 1;
   }
   :focus-visible {
-    outline: 2px solid #1b3a6b;
+    outline: 2px solid #008075;
     outline-offset: 2px;
   }
 }
@@ -52,7 +52,7 @@
            disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply btn bg-accent text-white hover:bg-[#16305a];
+    @apply btn bg-accent text-white hover:bg-accent-dark;
   }
   .btn-quiet {
     @apply btn border border-rule-strong bg-surface text-ink hover:bg-ground;

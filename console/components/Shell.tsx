@@ -2,10 +2,11 @@ import Link from "next/link"
 import { storeMode } from "@/lib/store"
 
 const NAV = [
-  { href: "/", label: "Dealers" },
+  { href: "/", label: "Showrooms" },
   { href: "/quote", label: "Quote" },
   { href: "/activations", label: "Activations" },
   { href: "/onboarding", label: "Onboarding" },
+  { href: "/audits", label: "Audits" },
   { href: "/campaigns", label: "Campaigns" },
   { href: "/analytics", label: "Analytics" },
   { href: "/optimisations", label: "Optimisations" },
@@ -29,11 +30,24 @@ export function Shell({
     <div className="min-h-screen flex flex-col md:flex-row">
       <nav className="md:w-52 shrink-0 bg-surface border-b md:border-b-0 md:border-r border-rule">
         <div className="px-5 py-5 border-b border-rule">
-          <Link href="/" className="block">
-            <div className="font-display font-extrabold text-[15px] tracking-tight leading-none">
-              AD MANAGER
+          <Link href="/" className="flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-lg object-contain shadow-sm"
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-display font-extrabold text-sm tracking-tight">
+                  CarDekho
+                </span>
+                <span className="text-[9px] font-bold bg-ground text-ink-soft border border-rule rounded px-1 py-px uppercase">
+                  NCBD
+                </span>
+              </div>
+              <div className="eyebrow mt-0.5">AdManager Console</div>
             </div>
-            <div className="eyebrow mt-1.5">Agency console</div>
           </Link>
         </div>
         <ul className="flex md:block overflow-x-auto">

@@ -2,9 +2,9 @@ import type { Metadata } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Ad Manager — Agency console",
+  title: "CarDekho NCBD — AdManager Console",
   description:
-    "Internal console for running and optimising dealer ad campaigns across Google and Meta.",
+    "Internal console for running and optimising showroom ad campaigns across Google and Meta.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

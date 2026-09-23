@@ -12,7 +12,7 @@
  */
 
 import type {
-  Campaign, Dealer, MetricsDaily, Optimization, Order, Projection, User,
+  Audit, Campaign, Dealer, MetricsDaily, Optimization, Order, Projection, User,
 } from "./types"
 
 export interface Store {
@@ -40,6 +40,10 @@ export interface Store {
   listOptimizations(status?: Optimization["status"]): Promise<Optimization[]>
   createOptimization(o: Omit<Optimization, "id" | "createdAt">): Promise<Optimization>
   updateOptimization(id: string, patch: Partial<Optimization>): Promise<Optimization | null>
+
+  listAudits(dealerId?: string): Promise<Audit[]>
+  createAudit(a: Omit<Audit, "id">): Promise<Audit>
+  updateAudit(id: string, patch: Partial<Audit>): Promise<Audit | null>
 
   listUsers(): Promise<User[]>
   createUser(u: User): Promise<void>
@@ -80,6 +84,7 @@ class MemoryStore implements Store {
   campaigns: Campaign[] = []
   metrics: MetricsDaily[] = []
   optimizations: Optimization[] = []
+  audits: Audit[] = []
   users: User[] = []
 
   async listDealers() {
@@ -188,6 +193,22 @@ class MemoryStore implements Store {
     return this.optimizations[idx]
   }
 
+  async listAudits(dealerId?: string) {
+    const all = [...this.audits].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return dealerId ? all.filter((a) => a.dealerId === dealerId) : all
+  }
+  async createAudit(a: Omit<Audit, "id">) {
+    const rec: Audit = { ...a, id: id("aud") }
+    this.audits.unshift(rec)
+    return rec
+  }
+  async updateAudit(i: string, patch: Partial<Audit>) {
+    const idx = this.audits.findIndex((a) => a.id === i)
+    if (idx === -1) return null
+    this.audits[idx] = { ...this.audits[idx], ...patch }
+    return this.audits[idx]
+  }
+
   async listUsers() {
     return this.users
   }
@@ -197,6 +218,7 @@ class MemoryStore implements Store {
     else this.users[idx] = u
   }
   async wipe() {
+    this.audits = []
     this.dealers = []
     this.projections = []
     this.orders = []
@@ -328,6 +350,17 @@ class FirestoreStore implements Store {
     return this.patch<Optimization>("optimizations", i, p)
   }
 
+  async listAudits(dealerId?: string) {
+    let q = this.col("audits")
+    if (dealerId) q = q.where("dealerId", "==", dealerId)
+    const snap = await q.get()
+    return snap.docs
+      .map((d: any) => ({ id: d.id, ...d.data() }) as Audit)
+      .sort((a: Audit, b: Audit) => b.createdAt.localeCompare(a.createdAt))
+  }
+  async createAudit(a: Omit<Audit, "id">) { return this.add<Audit>("audits", a) }
+  async updateAudit(i: string, p: Partial<Audit>) { return this.patch<Audit>("audits", i, p) }
+
   async listUsers() { return this.all<User>("users") }
   async createUser(u: User) {
     await this.col("users").doc(u.id).set(u, { merge: true })
@@ -335,7 +368,7 @@ class FirestoreStore implements Store {
   async wipe() {
     for (const name of [
       "dealers", "projections", "orders", "campaigns",
-      "metricsDaily", "optimizations", "users",
+      "metricsDaily", "optimizations", "audits", "users",
     ]) {
       // Firestore has no "delete collection"; batch through the documents.
       let snap = await this.col(name).limit(400).get()
