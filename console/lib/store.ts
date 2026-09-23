@@ -12,7 +12,8 @@
  */
 
 import type {
-  Audit, Campaign, Dealer, MetricsDaily, Optimization, Order, Projection, User,
+  Audit, Campaign, Dealer, Lead, LeadStatus, MetricsDaily, Optimization, Order,
+  Projection, User,
 } from "./types"
 
 export interface Store {
@@ -40,6 +41,17 @@ export interface Store {
   listOptimizations(status?: Optimization["status"]): Promise<Optimization[]>
   createOptimization(o: Omit<Optimization, "id" | "createdAt">): Promise<Optimization>
   updateOptimization(id: string, patch: Partial<Optimization>): Promise<Optimization | null>
+
+  listLeads(filter?: {
+    dealerId?: string
+    platform?: string
+    status?: LeadStatus
+    campaignId?: string
+    from?: string
+    to?: string
+  }): Promise<Lead[]>
+  createLead(l: Omit<Lead, "id">): Promise<Lead>
+  updateLead(id: string, patch: Partial<Lead>): Promise<Lead | null>
 
   listAudits(dealerId?: string): Promise<Audit[]>
   createAudit(a: Omit<Audit, "id">): Promise<Audit>
@@ -85,6 +97,7 @@ class MemoryStore implements Store {
   metrics: MetricsDaily[] = []
   optimizations: Optimization[] = []
   audits: Audit[] = []
+  leads: Lead[] = []
   users: User[] = []
 
   async listDealers() {
@@ -193,6 +206,34 @@ class MemoryStore implements Store {
     return this.optimizations[idx]
   }
 
+  async listLeads(f: {
+    dealerId?: string; platform?: string; status?: LeadStatus
+    campaignId?: string; from?: string; to?: string
+  } = {}) {
+    return this.leads
+      .filter(
+        (l) =>
+          (!f.dealerId || l.dealerId === f.dealerId) &&
+          (!f.platform || l.platform === f.platform) &&
+          (!f.status || l.status === f.status) &&
+          (!f.campaignId || l.campaignId === f.campaignId) &&
+          (!f.from || l.receivedAt >= f.from) &&
+          (!f.to || l.receivedAt <= f.to),
+      )
+      .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+  }
+  async createLead(l: Omit<Lead, "id">) {
+    const rec: Lead = { ...l, id: id("led") }
+    this.leads.unshift(rec)
+    return rec
+  }
+  async updateLead(i: string, patch: Partial<Lead>) {
+    const idx = this.leads.findIndex((l) => l.id === i)
+    if (idx === -1) return null
+    this.leads[idx] = { ...this.leads[idx], ...patch }
+    return this.leads[idx]
+  }
+
   async listAudits(dealerId?: string) {
     const all = [...this.audits].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     return dealerId ? all.filter((a) => a.dealerId === dealerId) : all
@@ -218,6 +259,7 @@ class MemoryStore implements Store {
     else this.users[idx] = u
   }
   async wipe() {
+    this.leads = []
     this.audits = []
     this.dealers = []
     this.projections = []
@@ -350,6 +392,29 @@ class FirestoreStore implements Store {
     return this.patch<Optimization>("optimizations", i, p)
   }
 
+  async listLeads(f: {
+    dealerId?: string; platform?: string; status?: LeadStatus
+    campaignId?: string; from?: string; to?: string
+  } = {}) {
+    let q = this.col("leads")
+    // Filter server-side where Firestore allows it; equality filters compose
+    // freely, so the common cases cost only the documents they return.
+    if (f.dealerId) q = q.where("dealerId", "==", f.dealerId)
+    if (f.platform) q = q.where("platform", "==", f.platform)
+    if (f.status) q = q.where("status", "==", f.status)
+    if (f.campaignId) q = q.where("campaignId", "==", f.campaignId)
+    const snap = await q.get()
+    return snap.docs
+      .map((d: any) => ({ id: d.id, ...d.data() }) as Lead)
+      .filter(
+        (l: Lead) =>
+          (!f.from || l.receivedAt >= f.from) && (!f.to || l.receivedAt <= f.to),
+      )
+      .sort((a: Lead, b: Lead) => b.receivedAt.localeCompare(a.receivedAt))
+  }
+  async createLead(l: Omit<Lead, "id">) { return this.add<Lead>("leads", l) }
+  async updateLead(i: string, p: Partial<Lead>) { return this.patch<Lead>("leads", i, p) }
+
   async listAudits(dealerId?: string) {
     let q = this.col("audits")
     if (dealerId) q = q.where("dealerId", "==", dealerId)
@@ -368,7 +433,7 @@ class FirestoreStore implements Store {
   async wipe() {
     for (const name of [
       "dealers", "projections", "orders", "campaigns",
-      "metricsDaily", "optimizations", "audits", "users",
+      "metricsDaily", "optimizations", "audits", "leads", "users",
     ]) {
       // Firestore has no "delete collection"; batch through the documents.
       let snap = await this.col(name).limit(400).get()

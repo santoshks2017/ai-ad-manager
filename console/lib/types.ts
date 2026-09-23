@@ -388,3 +388,54 @@ export interface Audit {
   sharedAt: string | null
   createdBy: string
 }
+
+
+/* ------------------------------------------------------------------ Leads */
+
+/**
+ * Where a lead physically came in.
+ *
+ * Today the console holds leads directly. Once the LMS integration lands it
+ * becomes the source of truth and these records sync from it — which is why
+ * `lmsRef` exists now rather than being retrofitted later.
+ */
+export type LeadSource =
+  | "landing_page"   // our hosted one-pager
+  | "call"           // the showroom's assigned virtual number
+  | "platform_form"  // Meta instant form / Google lead form
+
+export type LeadStatus = "new" | "contacted" | "qualified" | "lost"
+
+export const LEAD_STATUSES: { value: LeadStatus; label: string }[] = [
+  { value: "new", label: "New" },
+  { value: "contacted", label: "Contacted" },
+  { value: "qualified", label: "Qualified" },
+  { value: "lost", label: "Lost" },
+]
+
+export const LEAD_SOURCE_LABEL: Record<LeadSource, string> = {
+  landing_page: "Landing page",
+  call: "Phone call",
+  platform_form: "Platform form",
+}
+
+export interface Lead {
+  id: string
+  dealerId: string
+  campaignId: string | null
+  platform: Platform
+  source: LeadSource
+  /** The platform's own id, where there is one. Used to dedupe on re-sync. */
+  platformLeadId: string | null
+  /** Set once the LMS integration lands; null until then. */
+  lmsRef: string | null
+  name: string
+  phone: string
+  email: string | null
+  model: string | null
+  city: string | null
+  status: LeadStatus
+  notes: string | null
+  receivedAt: string
+  provenance: Provenance
+}

@@ -7,7 +7,10 @@
  */
 
 import type { Store } from "./store"
-import type { Campaign, Dealer, MetricsDaily, Optimization, Order, User } from "./types"
+import type {
+  Campaign, Dealer, Lead, LeadSource, LeadStatus, MetricsDaily, Optimization,
+  Order, User,
+} from "./types"
 import { runAudit } from "./audit"
 
 const iso = (daysAgo: number) =>
@@ -285,6 +288,8 @@ export async function seed(store: Store): Promise<void> {
   ]
   for (const p of proposals) await store.createOptimization(p)
 
+  await seedLeads(store, dealers, campaigns)
+
   // The prospect showroom has a finished audit waiting to be shared.
   const prospect = dealers.find((d) => d.status === "audit_ready")
   if (prospect) await seedAudit(store, prospect.id)
@@ -321,4 +326,122 @@ export async function seedAudit(store: {
     provenance: "simulated",
   })
   await store.createAudit(audit)
+}
+
+
+const FIRST = [
+  "Rahul", "Priya", "Amit", "Sneha", "Vikram", "Anjali", "Karthik", "Divya",
+  "Rohan", "Meera", "Arjun", "Pooja", "Sanjay", "Nisha", "Manish", "Kavya",
+  "Imran", "Farhan", "Ritu", "Deepak", "Aishwarya", "Suresh", "Neha", "Gaurav",
+]
+const LAST = [
+  "Sharma", "Verma", "Nair", "Reddy", "Patel", "Singh", "Iyer", "Gupta",
+  "Joshi", "Menon", "Rao", "Khan", "Desai", "Chauhan", "Pillai", "Bose",
+]
+
+/**
+ * Seed leads that deliberately DO NOT match the platform conversion counts.
+ *
+ * Real accounts never reconcile cleanly: the pixel misses some form fills, and
+ * calls to the virtual number are invisible to Google and Meta entirely. A seed
+ * where our lead count equals the platform's would make the reconciliation view
+ * look pointless, when the gap is the entire reason it exists.
+ *
+ * So: roughly 88% of platform-reported form conversions get a matching record,
+ * and a further slice arrives as calls the platforms never saw.
+ */
+async function seedLeads(
+  store: { createLead: (l: Omit<Lead, "id">) => Promise<Lead>; listMetrics: (d?: string) => Promise<MetricsDaily[]> },
+  dealers: Dealer[],
+  campaigns: Campaign[],
+): Promise<void> {
+  const rand = rng(77_2026)
+  const pick = <T,>(a: T[]) => a[Math.floor(rand() * a.length)]
+
+  const statuses: { s: LeadStatus; weight: number }[] = [
+    { s: "new", weight: 0.34 },
+    { s: "contacted", weight: 0.31 },
+    { s: "qualified", weight: 0.21 },
+    { s: "lost", weight: 0.14 },
+  ]
+  const pickStatus = (ageDays: number): LeadStatus => {
+    // Fresh leads skew to new; older ones have been worked.
+    if (ageDays <= 1 && rand() < 0.75) return "new"
+    let r = rand()
+    for (const { s, weight } of statuses) {
+      if (r < weight) return s
+      r -= weight
+    }
+    return "contacted"
+  }
+
+  const NOTES = [
+    "Asked for on-road price. Sending quote.",
+    "Wants an EMI breakdown before visiting.",
+    "Booked a test drive for Saturday.",
+    "Interested in exchange for a 2019 hatchback.",
+    "Number not reachable across three attempts.",
+    "Comparing with a competitor model.",
+    null, null, null,
+  ]
+
+  for (const dealer of dealers) {
+    if (dealer.status !== "active") continue
+    const metrics = await store.listMetrics(dealer.id)
+
+    for (const m of metrics) {
+      const campaign = campaigns.find(
+        (c) => c.dealerId === dealer.id && c.platform === m.platform,
+      )
+      const ageDays = Math.max(
+        0,
+        Math.round((Date.now() - new Date(m.date).getTime()) / 86_400_000),
+      )
+
+      // How much of the platform's reported conversions we actually hold.
+      //
+      // Kalyani Kia's Meta pixel is misconfigured — it fires on the thank-you
+      // page but the form post fails, so the platform counts conversions we
+      // have no lead record for. That is the tracking gap the reconciliation
+      // view exists to catch, and a seed where every row reconciles cleanly
+      // would make the view look pointless.
+      const brokenTracking = dealer.code === "KLKIAP" && m.platform === "meta"
+      const captureRate = brokenTracking ? 0.52 : 0.88
+      const captured = Math.round(m.leads * captureRate)
+      // Calls that never touched a pixel at all.
+      const calls = Math.round(m.leads * 0.22 * rand())
+
+      for (let i = 0; i < captured + calls; i++) {
+        const isCall = i >= captured
+        const source: LeadSource = isCall
+          ? "call"
+          : rand() < 0.8
+            ? "landing_page"
+            : "platform_form"
+
+        const name = `${pick(FIRST)} ${pick(LAST)}`
+        const hour = 9 + Math.floor(rand() * 11)
+        const minute = Math.floor(rand() * 60)
+
+        await store.createLead({
+          dealerId: dealer.id,
+          campaignId: campaign?.id ?? null,
+          platform: m.platform,
+          source,
+          platformLeadId: source === "platform_form" ? `sim_form_${m.date}_${i}` : null,
+          lmsRef: null,
+          name,
+          // Deliberately not a dialable range.
+          phone: `+91 80000 ${String(10000 + Math.floor(rand() * 89999)).slice(0, 5)}`,
+          email: isCall ? null : `${name.split(" ")[0].toLowerCase()}${Math.floor(rand() * 900 + 100)}@example.in`,
+          model: pick(dealer.models),
+          city: dealer.city,
+          status: pickStatus(ageDays),
+          notes: pick(NOTES),
+          receivedAt: `${m.date}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00.000Z`,
+          provenance: "simulated",
+        })
+      }
+    }
+  }
 }
