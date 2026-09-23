@@ -2,16 +2,15 @@ import Link from "next/link"
 import { Shell } from "@/components/Shell"
 import { getStore } from "@/lib/store"
 import { NewCampaignForm } from "./NewCampaignForm"
-import type { ImageAsset } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
 
 export default async function NewCampaign() {
   const store = await getStore()
-  const dealers = await store.listDealers()
-  // No image library yet, so Performance Max and Demand Gen will report what
-  // they need rather than creating campaigns that cannot serve.
-  const images: ImageAsset[] = []
+  const [dealers, images] = await Promise.all([
+    store.listDealers(),
+    store.listImages(),
+  ])
 
   return (
     <Shell

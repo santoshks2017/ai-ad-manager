@@ -13,7 +13,7 @@
 
 import type {
   Audit, Campaign, Dealer, Lead, LeadStatus, MetricsDaily, Optimization, Order,
-  PlatformToken, Projection, User,
+  ImageAsset, PlatformToken, Projection, User,
 } from "./types"
 
 export interface Store {
@@ -52,6 +52,10 @@ export interface Store {
   }): Promise<Lead[]>
   createLead(l: Omit<Lead, "id">): Promise<Lead>
   updateLead(id: string, patch: Partial<Lead>): Promise<Lead | null>
+
+  listImages(dealerId?: string): Promise<ImageAsset[]>
+  createImage(i: Omit<ImageAsset, "id">): Promise<ImageAsset>
+  deleteImage(id: string): Promise<boolean>
 
   getToken(dealerId: string, platform: string): Promise<PlatformToken | null>
   saveToken(t: Omit<PlatformToken, "id">): Promise<PlatformToken>
@@ -101,6 +105,7 @@ class MemoryStore implements Store {
   optimizations: Optimization[] = []
   audits: Audit[] = []
   tokens: PlatformToken[] = []
+  images: ImageAsset[] = []
   leads: Lead[] = []
   users: User[] = []
 
@@ -246,6 +251,21 @@ class MemoryStore implements Store {
     return this.leads[idx]
   }
 
+  async listImages(dealerId?: string) {
+    const all = [...this.images].sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))
+    return dealerId ? all.filter((i) => i.dealerId === dealerId) : all
+  }
+  async createImage(i: Omit<ImageAsset, "id">) {
+    const rec: ImageAsset = { ...i, id: id("img") }
+    this.images.unshift(rec)
+    return rec
+  }
+  async deleteImage(i: string) {
+    const before = this.images.length
+    this.images = this.images.filter((x) => x.id !== i)
+    return this.images.length < before
+  }
+
   async getToken(dealerId: string, platform: string) {
     return this.tokens.find((t) => t.dealerId === dealerId && t.platform === platform) ?? null
   }
@@ -282,6 +302,7 @@ class MemoryStore implements Store {
     else this.users[idx] = u
   }
   async wipe() {
+    this.images = []
     this.tokens = []
     this.leads = []
     this.audits = []
@@ -439,6 +460,22 @@ class FirestoreStore implements Store {
   async createLead(l: Omit<Lead, "id">) { return this.add<Lead>("leads", l) }
   async updateLead(i: string, p: Partial<Lead>) { return this.patch<Lead>("leads", i, p) }
 
+  async listImages(dealerId?: string) {
+    let q = this.col("imageAssets")
+    if (dealerId) q = q.where("dealerId", "==", dealerId)
+    const snap = await q.get()
+    return snap.docs
+      .map((d: any) => ({ id: d.id, ...d.data() }) as ImageAsset)
+      .sort((a: ImageAsset, b: ImageAsset) => b.uploadedAt.localeCompare(a.uploadedAt))
+  }
+  async createImage(i: Omit<ImageAsset, "id">) {
+    return this.add<ImageAsset>("imageAssets", i)
+  }
+  async deleteImage(i: string) {
+    await this.col("imageAssets").doc(i).delete()
+    return true
+  }
+
   async getToken(dealerId: string, platform: string) {
     const id = stableId("tok", `${dealerId}-${platform}`)
     return this.one<PlatformToken>("platformTokens", id)
@@ -467,7 +504,7 @@ class FirestoreStore implements Store {
   async wipe() {
     for (const name of [
       "dealers", "projections", "orders", "campaigns",
-      "metricsDaily", "optimizations", "audits", "leads", "platformTokens", "users",
+      "metricsDaily", "optimizations", "audits", "leads", "platformTokens", "imageAssets", "users",
     ]) {
       // Firestore has no "delete collection"; batch through the documents.
       let snap = await this.col(name).limit(400).get()
