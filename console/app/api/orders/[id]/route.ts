@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getStore } from "@/lib/store"
+import { actorId, currentUser } from "@/lib/session"
 
 const Body = z.object({
   status: z.enum(["activated", "rejected"]),
@@ -22,7 +23,7 @@ export async function PATCH(
   const store = await getStore()
   const updated = await store.updateOrder(id, {
     status: body.status,
-    activatedBy: "u_am1", // TODO: signed-in user once auth lands
+    activatedBy: actorId(await currentUser()),
     activatedAt: new Date().toISOString(),
     rejectedReason: body.rejectedReason ?? null,
   })

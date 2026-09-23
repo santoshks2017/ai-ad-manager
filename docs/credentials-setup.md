@@ -168,3 +168,90 @@ provider.
 4. **With the pilot cohort** — Meta App Review, which needs the real flow to
    exist first.
 5. **When spend justifies it** — Google Standard access and monthly invoicing.
+
+---
+
+## Meta App Review — what to submit
+
+App Review is the gate for Advanced ("Full") access to `ads_management`, which
+is what lets the console manage ad accounts you do not own. The console now has
+the flow a reviewer needs to follow.
+
+### What was built for this
+- **Real sign-in.** Firebase Auth, email and password, with roles. No shared
+  passphrase, and every action is now recorded against the person who took it.
+- **Facebook Login onboarding.** A showroom opens their own link, presses
+  **Continue with Facebook**, and grants `ads_management`, `ads_read` and
+  `business_management`. We discover their business, ad account and Page from
+  the token rather than anyone typing ids in.
+- **Delegated access model.** The showroom keeps ownership; we hold revocable
+  access. The page says so in plain language.
+
+### Before submitting
+
+**1. Create the Meta app** and set these on the service:
+
+```bash
+gcloud run services update ad-manager-console \
+  --project=aiad-manager --region=asia-south1 \
+  --update-env-vars="META_APP_ID=...,META_APP_SECRET=..."
+```
+
+**2. Register the redirect URI**, exactly:
+
+```
+https://ad-manager-console-604219434671.asia-south1.run.app/api/integrations/meta/callback
+```
+
+It must match character for character or Meta rejects the flow. The console
+builds it from `PUBLIC_ORIGIN`, which is already set.
+
+**3. Provision the reviewer login:**
+
+```bash
+cd console && npm run provision-users
+```
+
+This prints passwords once. The `meta.reviewer@girnarsoft.com` account gets
+account-manager rights — enough to see and operate the flow under review, not
+enough to change team access.
+
+### Instructions to give the reviewer
+
+Meta asks for step-by-step instructions. Something close to this:
+
+> This is an internal tool used by our account managers to run advertising for
+> car dealerships who are our clients. Each dealership owns its own Meta ad
+> account and grants us delegated access; we never take ownership.
+>
+> 1. Sign in at `/signin` with the credentials supplied.
+> 2. Open **Onboarding**. This lists dealerships at various stages of
+>    connecting their own Meta accounts.
+> 3. Open the onboarding link for any dealership. This is the page we send the
+>    dealership over WhatsApp.
+> 4. Press **Continue with Facebook** and authorise. This is the permission
+>    grant under review.
+> 5. After authorising you return to the same page, now showing the connected
+>    business and ad account.
+> 6. Back in the console, open **Campaigns → New campaign**, pick that
+>    dealership and build a campaign. This is what `ads_management` is used for.
+> 7. **Analytics** and **Reports** show what `ads_read` is used for: reporting
+>    delivery back to the dealership.
+
+### Why each permission is requested
+
+| Permission | Used for |
+|---|---|
+| `ads_management` | Creating and managing campaigns, ad sets and ads on the dealership's own ad account. |
+| `ads_read` | Reading delivery to report performance back to the dealership and to reconcile lead counts. |
+| `business_management` | Discovering which business, ad account and Page the dealership granted, so nobody has to type ids in by hand. |
+
+### The sequencing trap
+
+App Review wants to see a real multi-client flow. An app tested only against
+your own ad account gets rejected. So connect **two or three real pilot
+dealerships first**, then submit — the pilot cohort is what earns the access,
+not something you do after getting it.
+
+Meta also requires ongoing use to keep the access: at least 500 Marketing API
+calls in a trailing 15 days, with an error rate under 15%.

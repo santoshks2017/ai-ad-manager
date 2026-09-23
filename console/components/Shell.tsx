@@ -1,5 +1,7 @@
 import Link from "next/link"
 import { storeMode } from "@/lib/store"
+import { ROLE_LABEL, currentUser } from "@/lib/session"
+import { SignOut } from "./SignOut"
 
 const NAV = [
   { href: "/", label: "Showrooms" },
@@ -17,7 +19,7 @@ const NAV = [
   { href: "/setup", label: "Setup" },
 ]
 
-export function Shell({
+export async function Shell({
   children,
   title,
   subtitle,
@@ -29,6 +31,7 @@ export function Shell({
   actions?: React.ReactNode
 }) {
   const mode = storeMode()
+  const user = await currentUser()
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -82,6 +85,15 @@ export function Shell({
             <div className="flex items-center gap-3">
               {actions}
               <DataModeBadge mode={mode} />
+              {user && (
+                <div className="flex items-center gap-2.5">
+                  <div className="text-right leading-tight hidden sm:block">
+                    <div className="text-sm font-medium">{user.name}</div>
+                    <div className="eyebrow">{ROLE_LABEL[user.role]}</div>
+                  </div>
+                  <SignOut />
+                </div>
+              )}
             </div>
           </div>
         </header>

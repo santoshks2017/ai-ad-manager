@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
     "google-oauth": "tsx scripts/google-oauth.ts",
-    "check-credentials": "tsx scripts/check-credentials.ts"
+    "check-credentials": "tsx scripts/check-credentials.ts",
+    "provision-users": "tsx scripts/provision-users.ts"
   },
   "dependencies": {
     "next": "16.3.5",

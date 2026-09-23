@@ -13,7 +13,7 @@
 
 import type {
   Audit, Campaign, Dealer, Lead, LeadStatus, MetricsDaily, Optimization, Order,
-  Projection, User,
+  PlatformToken, Projection, User,
 } from "./types"
 
 export interface Store {
@@ -52,6 +52,9 @@ export interface Store {
   }): Promise<Lead[]>
   createLead(l: Omit<Lead, "id">): Promise<Lead>
   updateLead(id: string, patch: Partial<Lead>): Promise<Lead | null>
+
+  getToken(dealerId: string, platform: string): Promise<PlatformToken | null>
+  saveToken(t: Omit<PlatformToken, "id">): Promise<PlatformToken>
 
   listAudits(dealerId?: string): Promise<Audit[]>
   createAudit(a: Omit<Audit, "id">): Promise<Audit>
@@ -97,6 +100,7 @@ class MemoryStore implements Store {
   metrics: MetricsDaily[] = []
   optimizations: Optimization[] = []
   audits: Audit[] = []
+  tokens: PlatformToken[] = []
   leads: Lead[] = []
   users: User[] = []
 
@@ -242,6 +246,17 @@ class MemoryStore implements Store {
     return this.leads[idx]
   }
 
+  async getToken(dealerId: string, platform: string) {
+    return this.tokens.find((t) => t.dealerId === dealerId && t.platform === platform) ?? null
+  }
+  async saveToken(t: Omit<PlatformToken, "id">) {
+    const rec: PlatformToken = { ...t, id: stableId("tok", `${t.dealerId}-${t.platform}`) }
+    const idx = this.tokens.findIndex((x) => x.id === rec.id)
+    if (idx === -1) this.tokens.push(rec)
+    else this.tokens[idx] = rec
+    return rec
+  }
+
   async listAudits(dealerId?: string) {
     const all = [...this.audits].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     return dealerId ? all.filter((a) => a.dealerId === dealerId) : all
@@ -267,6 +282,7 @@ class MemoryStore implements Store {
     else this.users[idx] = u
   }
   async wipe() {
+    this.tokens = []
     this.leads = []
     this.audits = []
     this.dealers = []
@@ -423,6 +439,16 @@ class FirestoreStore implements Store {
   async createLead(l: Omit<Lead, "id">) { return this.add<Lead>("leads", l) }
   async updateLead(i: string, p: Partial<Lead>) { return this.patch<Lead>("leads", i, p) }
 
+  async getToken(dealerId: string, platform: string) {
+    const id = stableId("tok", `${dealerId}-${platform}`)
+    return this.one<PlatformToken>("platformTokens", id)
+  }
+  async saveToken(t: Omit<PlatformToken, "id">) {
+    const id = stableId("tok", `${t.dealerId}-${t.platform}`)
+    await this.col("platformTokens").doc(id).set(t, { merge: true })
+    return { id, ...t } as PlatformToken
+  }
+
   async listAudits(dealerId?: string) {
     let q = this.col("audits")
     if (dealerId) q = q.where("dealerId", "==", dealerId)
@@ -441,7 +467,7 @@ class FirestoreStore implements Store {
   async wipe() {
     for (const name of [
       "dealers", "projections", "orders", "campaigns",
-      "metricsDaily", "optimizations", "audits", "leads", "users",
+      "metricsDaily", "optimizations", "audits", "leads", "platformTokens", "users",
     ]) {
       // Firestore has no "delete collection"; batch through the documents.
       let snap = await this.col(name).limit(400).get()

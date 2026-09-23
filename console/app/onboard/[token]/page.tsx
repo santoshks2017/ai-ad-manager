@@ -15,10 +15,13 @@ export const dynamic = "force-dynamic"
  */
 export default async function OnboardDealer({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>
+  searchParams: Promise<{ meta?: string }>
 }) {
   const { token } = await params
+  const sp = await searchParams
   const dealerId = verifyOnboardToken(token)
   // An unsigned or tampered link is indistinguishable from a missing dealer,
   // so enumeration learns nothing either way.
@@ -61,6 +64,29 @@ export default async function OnboardDealer({
               and everything in them — we just need permission to run your campaigns.
             </p>
 
+            {sp.meta && <MetaResult status={sp.meta} />}
+
+            {dealer.platform?.meta?.grant !== "active" && (
+              <div className="card p-5 mt-6">
+                <div className="font-medium">Connect your Meta account</div>
+                <p className="text-sm text-ink-soft mt-1.5">
+                  Sign in with Facebook and approve access for your business. We will
+                  be able to run and manage ads on your ad account — nothing else. You
+                  can remove this at any time from your own Business Settings.
+                </p>
+                <a
+                  href={`/api/integrations/meta/start?token=${encodeURIComponent(token)}`}
+                  className="btn-primary mt-4"
+                >
+                  Continue with Facebook
+                </a>
+                <p className="text-2xs text-ink-faint mt-3">
+                  You stay the owner of your ad account, your Page and every lead they
+                  produce. We never see your Facebook password.
+                </p>
+              </div>
+            )}
+
             <ol className="mt-6 space-y-3">
               {steps.map((step, i) => (
                 <li
@@ -102,6 +128,46 @@ export default async function OnboardDealer({
           Meta's own websites, where you sign in yourself.
         </p>
       </div>
+    </div>
+  )
+}
+
+
+/** Feedback after Meta redirects the showroom back to us. */
+function MetaResult({ status }: { status: string }) {
+  const map: Record<string, { tone: string; title: string; body: string }> = {
+    connected: {
+      tone: "bg-signal-soft border-signal/20 text-signal",
+      title: "Meta account connected",
+      body: "We can see your ad account and Page. Nothing else to do on this step.",
+    },
+    partial: {
+      tone: "bg-amber-soft border-amber/25 text-amber",
+      title: "Connected, but something is missing",
+      body: "We got access but could not find both an ad account and a Page on your business. Your account manager will call you to finish this.",
+    },
+    declined: {
+      tone: "bg-ground border-rule text-ink-soft",
+      title: "Access not granted",
+      body: "No problem — nothing has changed. You can try again whenever you are ready.",
+    },
+    failed: {
+      tone: "bg-alert-soft border-alert/25 text-alert",
+      title: "That did not work",
+      body: "Something went wrong on our side. Your account manager will be in touch.",
+    },
+    unconfigured: {
+      tone: "bg-amber-soft border-amber/25 text-amber",
+      title: "Not ready yet",
+      body: "Meta connection is not switched on yet. Your account manager will let you know when it is.",
+    },
+  }
+  const m = map[status]
+  if (!m) return null
+  return (
+    <div className={`mt-6 px-4 py-3 border text-sm ${m.tone}`}>
+      <div className="font-medium">{m.title}</div>
+      <p className="text-ink-soft mt-0.5">{m.body}</p>
     </div>
   )
 }

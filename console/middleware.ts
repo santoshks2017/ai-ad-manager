@@ -2,59 +2,49 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 /**
- * Access gate.
+ * Route protection.
  *
- * Cloud Run serves publicly by default. Even though everything in the console
- * today is generated sample data, a dealer book on an open URL is not a habit
- * worth forming — real figures land in the same screens later. So the deployed
- * console sits behind a shared passphrase until proper Firebase Auth with
- * domain restriction replaces it.
- *
- * When ACCESS_PASSWORD is unset (local development) the gate is open.
+ * This is a shallow check: it only asks whether a session cookie is present,
+ * because middleware runs on the Edge runtime where firebase-admin cannot.
+ * The cookie is actually verified in server components and route handlers via
+ * `currentUser()` — that is where the authorisation decision matters, and a
+ * forged cookie fails there.
  */
+const PUBLIC_PATHS = [
+  "/signin",
+  "/api/auth/session",
+  // Showrooms open this from a WhatsApp link, so it cannot require a session.
+  // It is protected by a signed token instead and exposes only that
+  // showroom's name, city and remaining setup steps.
+  "/onboard/",
+  // Machine-to-machine, authenticated by its own shared secret.
+  "/api/optimisations/scan",
+]
+
 export function middleware(req: NextRequest) {
-  // The scheduled scan is machine-to-machine and carries its own shared
-  // secret, so it does not go through the passphrase gate.
-  if (req.nextUrl.pathname === "/api/optimisations/scan") {
+  const { pathname } = req.nextUrl
+
+  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p))) {
     return NextResponse.next()
   }
 
-  // The dealer onboarding page is opened by dealers from a WhatsApp link, so it
-  // cannot sit behind the staff passphrase. It exposes only the dealer's own
-  // name, city and remaining setup steps — no performance figures, no spend,
-  // and no data about any other dealer.
-  if (req.nextUrl.pathname.startsWith("/onboard/")) {
-    return NextResponse.next()
+  // Meta and Google redirect back here after a showroom authorises us; the
+  // callback carries its own signed state parameter.
+  if (pathname.startsWith("/api/integrations/")) return NextResponse.next()
+
+  const hasSession = Boolean(req.cookies.get("console_session")?.value)
+  if (hasSession) return NextResponse.next()
+
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 })
   }
 
-  const expected = process.env.ACCESS_PASSWORD
-  if (!expected) return NextResponse.next()
-
-  const cookie = req.cookies.get("console_access")?.value
-  if (cookie === expected) return NextResponse.next()
-
-  const auth = req.headers.get("authorization")
-  if (auth?.startsWith("Basic ")) {
-    const decoded = atob(auth.slice(6))
-    const password = decoded.split(":")[1] ?? ""
-    if (password === expected) {
-      const res = NextResponse.next()
-      res.cookies.set("console_access", expected, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 30,
-      })
-      return res
-    }
-  }
-
-  return new NextResponse("Authentication required.", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Ad Manager console"' },
-  })
+  const url = req.nextUrl.clone()
+  url.pathname = "/signin"
+  url.search = `?next=${encodeURIComponent(pathname)}`
+  return NextResponse.redirect(url)
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|logo.png).*)"],
 }

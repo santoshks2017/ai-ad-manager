@@ -439,3 +439,25 @@ export interface Lead {
   receivedAt: string
   provenance: Provenance
 }
+
+
+/**
+ * A delegated access token for a showroom's platform account.
+ *
+ * Kept in its own collection rather than on the showroom record so ordinary
+ * reads of a dealer never carry a live credential around the application.
+ *
+ * These belong in Secret Manager before real money runs through them —
+ * Firestore is fine for the review flow, not for production spend.
+ */
+export interface PlatformToken {
+  id: string
+  dealerId: string
+  platform: Platform
+  accessToken: string
+  /** Null when the token does not expire on a fixed schedule. */
+  expiresAt: string | null
+  scopes: string[]
+  grantedAt: string
+  lastVerifiedAt: string | null
+}

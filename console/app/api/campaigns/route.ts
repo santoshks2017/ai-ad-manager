@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getStore } from "@/lib/store"
+import { actorId, currentUser } from "@/lib/session"
 import { getProvider } from "@/lib/providers"
 import type { CreateCampaignInput } from "@/lib/providers"
 import type { Campaign, Platform } from "@/lib/types"
@@ -148,7 +149,7 @@ export async function POST(req: Request) {
         // Reflect what the provider actually did, not what was asked for.
         status: result.data.status,
         provenance: result.provenance,
-        createdBy: "u_am1", // TODO: signed-in user once auth lands
+        createdBy: actorId(await currentUser()),
       }),
     )
   }

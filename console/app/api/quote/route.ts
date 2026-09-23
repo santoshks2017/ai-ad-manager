@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { project } from "@/lib/projection"
 import { getStore } from "@/lib/store"
+import { actorId, currentUser } from "@/lib/session"
 import type { HistoricalSample } from "@/lib/projection"
 import type { Objective } from "@/lib/types"
 
@@ -63,7 +64,7 @@ export async function POST(req: Request) {
         durationDays: parsed.durationDays,
       },
       output,
-      createdBy: "u_sales1", // TODO: replace with the signed-in user once auth lands
+      createdBy: actorId(await currentUser()),
     })
     return NextResponse.json({ projection: saved, output })
   }

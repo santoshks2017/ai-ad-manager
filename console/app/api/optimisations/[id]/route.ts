@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getStore } from "@/lib/store"
 import { applyOptimization } from "@/lib/apply"
+import { actorId, currentUser } from "@/lib/session"
 
 const Body = z.object({ status: z.enum(["approved", "rejected"]) })
 
@@ -19,11 +20,12 @@ export async function PATCH(
 
   const store = await getStore()
   const now = new Date()
+  const actor = actorId(await currentUser())
 
   if (body.status === "rejected") {
     const rejected = await store.updateOptimization(id, {
       status: "rejected",
-      decidedBy: "u_am1", // TODO: signed-in user once auth lands
+      decidedBy: actor,
       decidedAt: now.toISOString(),
     })
     return rejected
@@ -58,7 +60,7 @@ export async function PATCH(
 
   const updated = await store.updateOptimization(id, {
     status: outcome.applied ? "applied" : "approved",
-    decidedBy: "u_am1", // TODO: signed-in user once auth lands
+    decidedBy: actor,
     decidedAt: now.toISOString(),
     appliedAt: outcome.applied ? now.toISOString() : null,
   })
