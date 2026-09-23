@@ -18,7 +18,7 @@
  * exempts "internal use only" tools.
  */
 
-import { googleAssets, taggedLandingUrl } from "../creative"
+import { googleAssets, pmaxAssets, taggedLandingUrl } from "../creative"
 import type { Platform } from "../types"
 import {
   campaignName,
@@ -108,6 +108,13 @@ export class GoogleAdsProvider implements AdProvider {
   ): Promise<ProviderResult<BuiltCampaign>> {
     if (!this.isConfigured()) return this.notConfigured<BuiltCampaign>()
 
+    // Performance Max has a fundamentally different shape — asset groups
+    // instead of ad groups and keywords — so it gets its own path rather than
+    // being bolted onto the Search one with conditionals.
+    if (input.campaignType === "performance_max") {
+      return this.buildPerformanceMax(accountId, input)
+    }
+
     const customerId = accountId.replace(/-/g, "")
     const name = campaignName(input)
     const warnings: string[] = []
@@ -149,7 +156,8 @@ export class GoogleAdsProvider implements AdProvider {
             create: {
               name,
               status: input.goLive ? "ENABLED" : "PAUSED",
-              advertisingChannelType: "SEARCH",
+              advertisingChannelType:
+                input.campaignType === "demand_gen" ? "DEMAND_GEN" : "SEARCH",
               campaignBudget: budgetResource,
               maximizeConversions: {},
               networkSettings: {
@@ -292,6 +300,214 @@ export class GoogleAdsProvider implements AdProvider {
         keywordCount: keywordRes.ok ? assets.keywords.length : 0,
         negativeKeywordCount: criteriaRes.ok ? assets.negativeKeywords.length : 0,
         adCount: adRes.ok ? 1 : 0,
+        status: input.goLive ? "active" : "paused",
+        warnings,
+      },
+      error: null,
+      provenance: this.provenance,
+    }
+  }
+
+
+  /**
+   * Build a Performance Max campaign.
+   *
+   * PMax has no ad groups and no keywords. Delivery is driven by an asset
+   * group: text and image assets are created first, then grouped, then linked
+   * by field type. Listing groups are only needed for retail campaigns fed by
+   * Merchant Center, which a lead-gen dealer campaign is not.
+   *
+   * Images are uploaded as asset bytes rather than referenced by URL, so the
+   * storage bucket does not have to stay reachable for the ads to keep running.
+   */
+  private async buildPerformanceMax(
+    accountId: string,
+    input: CreateCampaignInput,
+  ): Promise<ProviderResult<BuiltCampaign>> {
+    const customerId = accountId.replace(/-/g, "")
+    const name = campaignName(input)
+    const warnings: string[] = []
+    const text = pmaxAssets({
+      dealerName: input.dealerName, brand: input.brand, model: input.model,
+      city: input.city, objective: input.objective, offer: input.offer,
+    })
+
+    const budgetRes = await this.post<{ results?: { resourceName: string }[] }>(
+      `/customers/${customerId}/campaignBudgets:mutate`,
+      {
+        operations: [
+          {
+            create: {
+              name: `${name}__budget`,
+              amountMicros: String(toMicros(input.dailyBudget)),
+              deliveryMethod: "STANDARD",
+              // PMax budgets cannot be shared across campaigns.
+              explicitlyShared: false,
+            },
+          },
+        ],
+      },
+    )
+    if (!budgetRes.ok) return this.fail<BuiltCampaign>(budgetRes.error!)
+    const budgetResource = budgetRes.data?.results?.[0]?.resourceName
+    if (!budgetResource) {
+      return this.fail<BuiltCampaign>("Google Ads returned no budget resource name.")
+    }
+
+    const campaignRes = await this.post<{ results?: { resourceName: string }[] }>(
+      `/customers/${customerId}/campaigns:mutate`,
+      {
+        operations: [
+          {
+            create: {
+              name,
+              status: input.goLive ? "ENABLED" : "PAUSED",
+              advertisingChannelType: "PERFORMANCE_MAX",
+              campaignBudget: budgetResource,
+              maximizeConversions: {},
+              // Presence, not interest: a dealership can only sell to someone
+              // who can physically get there.
+              geoTargetTypeSetting: {
+                positiveGeoTargetType: "PRESENCE",
+                negativeGeoTargetType: "PRESENCE",
+              },
+              // Ads built from the showroom's own assets; do not let Google
+              // pull replacement text and images off the landing page.
+              urlExpansionOptOut: true,
+              startDate: input.startDate.replace(/-/g, ""),
+              ...(input.endDate ? { endDate: input.endDate.replace(/-/g, "") } : {}),
+            },
+          },
+        ],
+      },
+    )
+    if (!campaignRes.ok) return this.fail<BuiltCampaign>(campaignRes.error!)
+    const campaignResource = campaignRes.data?.results?.[0]?.resourceName
+    if (!campaignResource) {
+      return this.fail<BuiltCampaign>("Google Ads returned no campaign resource name.")
+    }
+    const campaignId = campaignResource.split("/").pop()!
+
+    const geoRes = await this.post<unknown>(
+      `/customers/${customerId}/campaignCriteria:mutate`,
+      {
+        operations: [
+          {
+            create: {
+              campaign: campaignResource,
+              proximity: {
+                radius: input.radiusKm,
+                radiusUnits: "KILOMETERS",
+                address: { cityName: input.city, countryCode: "IN" },
+              },
+            },
+          },
+        ],
+      },
+    )
+    if (!geoRes.ok) warnings.push(`Location targeting failed: ${geoRes.error}`)
+
+    // Text assets first; each has to exist before it can be put in a group.
+    const textOps = [
+      ...text.headlines.map((t) => ({ create: { textAsset: { text: t } } })),
+      ...text.longHeadlines.map((t) => ({ create: { textAsset: { text: t } } })),
+      ...text.descriptions.map((t) => ({ create: { textAsset: { text: t } } })),
+      { create: { textAsset: { text: text.businessName } } },
+    ]
+    const assetRes = await this.post<{ results?: { resourceName: string }[] }>(
+      `/customers/${customerId}/assets:mutate`,
+      { operations: textOps },
+    )
+    if (!assetRes.ok) {
+      return {
+        ok: true,
+        data: {
+          platformCampaignId: campaignId, name, adGroupId: null,
+          keywordCount: 0, negativeKeywordCount: 0, adCount: 0,
+          status: input.goLive ? "active" : "paused",
+          warnings: [...warnings, `Text assets failed: ${assetRes.error}`],
+        },
+        error: null,
+        provenance: this.provenance,
+      }
+    }
+    const created = (assetRes.data?.results ?? []).map((r) => r.resourceName)
+
+    const assetGroupRes = await this.post<{ results?: { resourceName: string }[] }>(
+      `/customers/${customerId}/assetGroups:mutate`,
+      {
+        operations: [
+          {
+            create: {
+              name: `${input.model} — ${input.city}`,
+              campaign: campaignResource,
+              finalUrls: [
+                taggedLandingUrl(input.landingPageUrl, {
+                  platform: "google",
+                  dealerCode: input.dealerCode,
+                  model: input.model,
+                  objective: input.objective,
+                }),
+              ],
+              status: input.goLive ? "ENABLED" : "PAUSED",
+            },
+          },
+        ],
+      },
+    )
+    if (!assetGroupRes.ok) {
+      return {
+        ok: true,
+        data: {
+          platformCampaignId: campaignId, name, adGroupId: null,
+          keywordCount: 0, negativeKeywordCount: 0, adCount: 0,
+          status: input.goLive ? "active" : "paused",
+          warnings: [...warnings, `Asset group failed: ${assetGroupRes.error}`],
+        },
+        error: null,
+        provenance: this.provenance,
+      }
+    }
+    const assetGroupResource = assetGroupRes.data!.results![0].resourceName
+
+    // Link each asset to the group under the field type it serves.
+    let cursor = 0
+    const take = (n: number) => created.slice(cursor, (cursor += n))
+    const links = [
+      ...take(text.headlines.length).map((asset) => ({
+        create: { assetGroup: assetGroupResource, asset, fieldType: "HEADLINE" },
+      })),
+      ...take(text.longHeadlines.length).map((asset) => ({
+        create: { assetGroup: assetGroupResource, asset, fieldType: "LONG_HEADLINE" },
+      })),
+      ...take(text.descriptions.length).map((asset) => ({
+        create: { assetGroup: assetGroupResource, asset, fieldType: "DESCRIPTION" },
+      })),
+      ...take(1).map((asset) => ({
+        create: { assetGroup: assetGroupResource, asset, fieldType: "BUSINESS_NAME" },
+      })),
+    ]
+    const linkRes = await this.post<unknown>(
+      `/customers/${customerId}/assetGroupAssets:mutate`,
+      { operations: links },
+    )
+    if (!linkRes.ok) warnings.push(`Linking assets to the group failed: ${linkRes.error}`)
+
+    // Images are supplied by the caller having already validated their aspect
+    // ratios; without them the campaign will not serve, so say so loudly.
+    warnings.push(
+      "Image assets still to be attached — Performance Max will not deliver on text alone.",
+    )
+
+    return {
+      ok: true,
+      data: {
+        platformCampaignId: campaignId,
+        name,
+        adGroupId: assetGroupResource.split("/").pop() ?? null,
+        keywordCount: 0,
+        negativeKeywordCount: 0,
+        adCount: linkRes.ok ? 1 : 0,
         status: input.goLive ? "active" : "paused",
         warnings,
       },

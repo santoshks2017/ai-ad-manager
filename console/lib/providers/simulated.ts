@@ -60,8 +60,10 @@ export class SimulatedProvider implements AdProvider {
   ): Promise<ProviderResult<BuiltCampaign>> {
     const name = campaignName(input)
     const id = `sim-${this.platform}-${hash(`${accountId}${name}`).toString(36)}`
+    // PMax has no keywords, so reporting them would be a lie the UI repeats.
+    const isPmax = input.campaignType === "performance_max"
     const assets =
-      this.platform === "google"
+      this.platform === "google" && !isPmax
         ? googleAssets({
             dealerName: input.dealerName, brand: input.brand, model: input.model,
             city: input.city, objective: input.objective, offer: input.offer,
@@ -78,10 +80,11 @@ export class SimulatedProvider implements AdProvider {
     return this.ok({
       platformCampaignId: id,
       name,
-      adGroupId: `${id}-ag`,
+      adGroupId: isPmax ? `${id}-assetgroup` : `${id}-ag`,
       keywordCount: assets?.keywords.length ?? 0,
       negativeKeywordCount: assets?.negativeKeywords.length ?? 0,
-      adCount: assets ? 1 : (meta?.primaryTexts.length ?? 0),
+      // PMax delivers through one asset group rather than discrete ads.
+      adCount: isPmax ? 1 : assets ? 1 : (meta?.primaryTexts.length ?? 0),
       status: input.goLive ? "active" : "paused",
       warnings: [],
     })
