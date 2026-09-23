@@ -66,9 +66,13 @@ export async function currentUser(): Promise<SessionUser | null> {
     const { getStore } = await import("./store")
     const store = await getStore()
     const users = await store.listUsers()
-    const record = users.find(
-      (u) => u.email.toLowerCase() === (decoded.email ?? "").toLowerCase(),
-    )
+    // Prefer the record keyed by the real Firebase uid. Sample data seeds
+    // placeholder users with the same emails, so matching on email alone can
+    // pick the wrong record and hand back the wrong role.
+    const email = (decoded.email ?? "").toLowerCase()
+    const record =
+      users.find((u) => u.id === decoded.uid) ??
+      users.find((u) => u.email.toLowerCase() === email)
 
     if (record && !record.active) return null
 

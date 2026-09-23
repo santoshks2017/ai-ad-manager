@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { signOut } from "firebase/auth"
-import { clientAuth, firebaseConfigured } from "@/lib/firebase-client"
+import { clientAuth, isConfigured, type FirebaseClientConfig } from "@/lib/firebase-client"
 
-export function SignOut() {
+export function SignOut({ config }: { config: FirebaseClientConfig | null }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
 
@@ -15,7 +15,7 @@ export function SignOut() {
       // Clear the server cookie first — if only the client signs out, a stolen
       // cookie would still work.
       await fetch("/api/auth/session", { method: "DELETE" })
-      if (firebaseConfigured()) await signOut(clientAuth()).catch(() => {})
+      if (isConfigured(config)) await signOut(clientAuth(config)).catch(() => {})
       router.push("/signin")
       router.refresh()
     } finally {

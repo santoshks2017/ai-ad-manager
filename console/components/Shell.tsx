@@ -2,6 +2,7 @@ import Link from "next/link"
 import { storeMode } from "@/lib/store"
 import { ROLE_LABEL, currentUser } from "@/lib/session"
 import { SignOut } from "./SignOut"
+import { firebaseClientConfig } from "@/lib/firebase-config"
 
 const NAV = [
   { href: "/", label: "Showrooms" },
@@ -32,6 +33,7 @@ export async function Shell({
 }) {
   const mode = storeMode()
   const user = await currentUser()
+  const firebase = firebaseClientConfig()
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -91,7 +93,7 @@ export async function Shell({
                     <div className="text-sm font-medium">{user.name}</div>
                     <div className="eyebrow">{ROLE_LABEL[user.role]}</div>
                   </div>
-                  <SignOut />
+                  <SignOut config={firebase} />
                 </div>
               )}
             </div>

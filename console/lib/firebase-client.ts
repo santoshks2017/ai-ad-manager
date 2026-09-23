@@ -6,21 +6,30 @@ import { getAuth, type Auth } from "firebase/auth"
 /**
  * Browser-side Firebase.
  *
- * These values are publishable by design — the API key identifies the project,
- * it does not authorise anything. Access is controlled by Firebase Auth and by
- * the server verifying the session cookie, not by keeping this secret.
+ * Config is passed in from the server rather than read from NEXT_PUBLIC_*
+ * variables. Those are inlined at build time, and this image is built by Cloud
+ * Build without them — the runtime `--set-env-vars` arrive too late, so the
+ * client silently got `undefined` and sign-in was dead in production while
+ * looking fine locally.
+ *
+ * Reading it at request time also means rotating the key or pointing at another
+ * Firebase project needs no rebuild.
+ *
+ * These values are publishable by design: the API key identifies the project,
+ * it does not authorise anything. Access is enforced by Firebase Auth and by
+ * the server verifying the session cookie.
  */
-const config = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+export interface FirebaseClientConfig {
+  apiKey: string
+  authDomain: string
+  projectId: string
 }
 
-export function clientAuth(): Auth {
+export function clientAuth(config: FirebaseClientConfig): Auth {
   const app: FirebaseApp = getApps().length ? getApps()[0] : initializeApp(config)
   return getAuth(app)
 }
 
-export function firebaseConfigured(): boolean {
-  return Boolean(config.apiKey && config.authDomain && config.projectId)
+export function isConfigured(config: FirebaseClientConfig | null): config is FirebaseClientConfig {
+  return Boolean(config?.apiKey && config?.authDomain && config?.projectId)
 }

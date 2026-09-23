@@ -3,9 +3,9 @@
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
 import { signInWithEmailAndPassword } from "firebase/auth"
-import { clientAuth, firebaseConfigured } from "@/lib/firebase-client"
+import { clientAuth, isConfigured, type FirebaseClientConfig } from "@/lib/firebase-client"
 
-export function SignInForm() {
+export function SignInForm({ config }: { config: FirebaseClientConfig | null }) {
   const router = useRouter()
   const params = useSearchParams()
   const next = params.get("next") || "/"
@@ -15,13 +15,12 @@ export function SignInForm() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  if (!firebaseConfigured()) {
+  if (!isConfigured(config)) {
     return (
       <div className="px-4 py-3 bg-amber-soft border border-amber/25 text-sm">
         <span className="font-medium text-amber">Sign-in is not configured.</span>{" "}
         <span className="text-ink-soft">
-          Set NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN and
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID on the service.
+          Set FIREBASE_API_KEY and FIREBASE_PROJECT_ID on the service.
         </span>
       </div>
     )
@@ -29,10 +28,11 @@ export function SignInForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (!isConfigured(config)) return
     setBusy(true)
     setError(null)
     try {
-      const cred = await signInWithEmailAndPassword(clientAuth(), email, password)
+      const cred = await signInWithEmailAndPassword(clientAuth(config), email, password)
       const idToken = await cred.user.getIdToken()
 
       // Trade the ID token for an httpOnly session cookie. The ID token itself

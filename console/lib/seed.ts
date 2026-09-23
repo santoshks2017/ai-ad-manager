@@ -154,7 +154,14 @@ const DEALERS: Omit<Dealer, "id" | "createdAt" | "updatedAt">[] = [
 ]
 
 export async function seed(store: Store): Promise<void> {
-  for (const u of USERS) await store.createUser(u)
+  // Never shadow a real provisioned sign-in. Those carry the Firebase uid as
+  // their id; seeding a second record with the same email would leave two
+  // rows per person and make role lookup depend on iteration order.
+  const existing = await store.listUsers()
+  const taken = new Set(existing.map((u) => u.email.toLowerCase()))
+  for (const u of USERS) {
+    if (!taken.has(u.email.toLowerCase())) await store.createUser(u)
+  }
 
   const dealers: Dealer[] = []
   for (const d of DEALERS) dealers.push(await store.createDealer(d))

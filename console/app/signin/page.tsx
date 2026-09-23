@@ -1,9 +1,11 @@
 import { Suspense } from "react"
 import { SignInForm } from "./SignInForm"
+import { firebaseClientConfig } from "@/lib/firebase-config"
 
 export const dynamic = "force-dynamic"
 
 export default function SignIn() {
+  const config = firebaseClientConfig()
   return (
     <div className="min-h-screen bg-ground flex items-center justify-center px-5 py-10">
       <div className="w-full max-w-sm">
@@ -29,7 +31,7 @@ export default function SignIn() {
             For the account management and sales teams.
           </p>
           <Suspense fallback={null}>
-            <SignInForm />
+            <SignInForm config={config} />
           </Suspense>
         </div>
 
