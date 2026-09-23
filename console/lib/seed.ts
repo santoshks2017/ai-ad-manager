@@ -71,6 +71,8 @@ function assets(opts: {
     metaAdAccountId: opts.meta ? `${c}-meta-adacct` : null,
     metaState: opts.meta ? "ready" : "not_started",
     metaVerified: opts.meta ? (opts.verified ?? true) : false,
+    googleBusinessProfileLinked: opts.google ?? false,
+    googleBusinessAccountEmail: opts.google ? `gbp.${c}@example.in` : null,
     servicesAgreementSigned: opts.agreement ?? true,
     legalDocsCollected: opts.docs ?? true,
   }

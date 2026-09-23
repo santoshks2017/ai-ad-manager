@@ -222,3 +222,72 @@ export function taggedLandingUrl(
   })
   return url.includes("?") ? `${url}&${params}` : `${url}?${params}`
 }
+
+/* ------------------------------------------- Performance Max / Demand Gen */
+
+export const PMAX_LONG_HEADLINE_MAX = 90
+export const DEMAND_GEN_HEADLINE_MAX = 40
+
+export interface AssetGroupText {
+  headlines: string[]
+  longHeadlines: string[]
+  descriptions: string[]
+  businessName: string
+}
+
+/**
+ * Text for a Performance Max asset group.
+ *
+ * PMax takes the same 30-character headlines as Search but adds a long
+ * headline, which is the one that actually shows on YouTube and Discover
+ * placements where there is room for a sentence.
+ */
+export function pmaxAssets(i: CreativeInput): AssetGroupText {
+  const g = googleAssets(i)
+  const { brand, model, city, dealerName, offer } = i
+
+  return {
+    headlines: g.headlines.slice(0, 15),
+    longHeadlines: validated(
+      [
+        offer
+          ? `${offer} on the ${brand} ${model} at ${dealerName}, ${city}`
+          : `Book your ${brand} ${model} test drive at ${dealerName} in ${city}`,
+        `${dealerName} — authorised ${brand} dealer in ${city}. Finance and exchange available.`,
+        `Get the on-road price for the ${model} in ${city} and a callback the same day`,
+      ],
+      PMAX_LONG_HEADLINE_MAX,
+    ).slice(0, 5),
+    descriptions: g.descriptions.slice(0, 5),
+    businessName: fit(dealerName, 25),
+  }
+}
+
+/**
+ * Text for a Demand Gen ad group.
+ *
+ * Headlines run to 40 characters here rather than 30, but at least one must
+ * still fit 30 for the placements that crop — so the Search-length set is
+ * reused as the short end rather than generating a second set that might not.
+ */
+export function demandGenAssets(i: CreativeInput): AssetGroupText {
+  const g = googleAssets(i)
+  const { brand, model, city, dealerName, offer } = i
+
+  const longer = validated(
+    [
+      offer ? `${offer} — ${model} at ${dealerName}` : `The ${brand} ${model} at ${dealerName}`,
+      `Book a ${model} test drive in ${city}`,
+      `${model} offers at your ${city} showroom`,
+    ],
+    DEMAND_GEN_HEADLINE_MAX,
+  )
+
+  return {
+    // Keep a ≤30 headline first so cropping placements always have one.
+    headlines: [...g.headlines.slice(0, 2), ...longer].slice(0, 5),
+    longHeadlines: [],
+    descriptions: g.descriptions.slice(0, 5),
+    businessName: fit(dealerName, 25),
+  }
+}

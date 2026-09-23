@@ -3,16 +3,24 @@
 import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
 import { inr } from "@/lib/format"
-import { OBJECTIVES } from "@/lib/types"
-import type { Dealer, Objective, Platform } from "@/lib/types"
+import { CAMPAIGN_TYPES, OBJECTIVES } from "@/lib/types"
+import { campaignReadiness } from "@/lib/campaign-readiness"
+import type { CampaignType, Dealer, ImageAsset, Objective, Platform } from "@/lib/types"
 
-export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
+export function NewCampaignForm({
+  dealers,
+  images,
+}: {
+  dealers: Dealer[]
+  images: ImageAsset[]
+}) {
   const router = useRouter()
   const eligible = dealers.filter((d) => d.status === "active")
 
   const [dealerId, setDealerId] = useState(eligible[0]?.id ?? "")
   const [model, setModel] = useState(eligible[0]?.models[0] ?? "")
   const [objective, setObjective] = useState<Objective>("leads")
+  const [campaignType, setCampaignType] = useState<CampaignType>("search")
   const [platforms, setPlatforms] = useState<Platform[]>(["google", "meta"])
   const [monthlyBudget, setMonthlyBudget] = useState(100_000)
   const [metaSharePct, setMetaSharePct] = useState(65)
@@ -33,6 +41,13 @@ export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
 
   const dealer = eligible.find((d) => d.id === dealerId)
 
+  // Whether the chosen Google campaign type can actually serve. Performance Max
+  // and Demand Gen accept a campaign with no imagery and then never deliver.
+  const readiness = useMemo(
+    () => (dealer ? campaignReadiness(campaignType, dealer, images) : null),
+    [dealer, campaignType, images],
+  )
+
   const blockers = useMemo(() => {
     if (!dealer) return []
     const b: string[] = []
@@ -41,8 +56,11 @@ export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
       b.push("Google Ads account not ready")
     if (platforms.includes("meta") && dealer.platform?.metaState !== "ready")
       b.push("Meta Page and ad account not ready")
+    if (platforms.includes("google") && readiness && !readiness.ready) {
+      for (const p of readiness.problems.filter((x) => x.blocking)) b.push(p.message)
+    }
     return b
-  }, [dealer, platforms])
+  }, [dealer, platforms, readiness])
 
   const autoHeadline = dealer ? `${model} at ${dealer.name}` : ""
   const autoDescription = dealer
@@ -71,6 +89,7 @@ export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
           description: description || autoDescription,
           offer: offer || null,
           goLive,
+          campaignType,
         }),
       })
       const data = await res.json()
@@ -138,6 +157,70 @@ export function NewCampaignForm({ dealers }: { dealers: Dealer[] }) {
             {dealer?.models.map((m) => <option key={m} value={m} />)}
           </datalist>
         </div>
+
+        <div>
+          <span className="label">Google campaign type</span>
+          <div className="space-y-2">
+            {Object.values(CAMPAIGN_TYPES).map((t) => (
+              <label
+                key={t.id}
+                className={`block p-3 border cursor-pointer transition-colors ${
+                  campaignType === t.id
+                    ? "border-accent bg-accent-soft"
+                    : "border-rule hover:bg-ground"
+                }`}
+              >
+                <span className="flex items-start gap-2.5">
+                  <input
+                    type="radio" checked={campaignType === t.id}
+                    onChange={() => setCampaignType(t.id)}
+                    className="mt-0.5 accent-[#008075]"
+                  />
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{t.label}</span>
+                      {t.supportsLeadForm && (
+                        <span className="text-2xs uppercase tracking-[0.08em] px-1.5 py-0.5
+                                         border border-signal/20 bg-signal-soft text-signal">
+                          Lead form
+                        </span>
+                      )}
+                      {t.requiresImages && (
+                        <span className="text-2xs uppercase tracking-[0.08em] px-1.5 py-0.5
+                                         border border-amber/25 bg-amber-soft text-amber">
+                          Needs images
+                        </span>
+                      )}
+                    </span>
+                    <span className="block text-2xs text-ink-soft mt-0.5">
+                      {t.description}
+                    </span>
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {readiness && readiness.problems.length > 0 && (
+          <div className="space-y-2">
+            {readiness.problems.map((p, i) => (
+              <div
+                key={i}
+                className={`px-3 py-2.5 border text-sm ${
+                  p.blocking
+                    ? "bg-alert-soft border-alert/25"
+                    : "bg-amber-soft border-amber/25"
+                }`}
+              >
+                <span className="font-medium">
+                  {p.blocking ? "Cannot run yet." : "Worth fixing."}
+                </span>{" "}
+                <span className="text-ink-soft">{p.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div>
           <label className="label" htmlFor="objective">Objective</label>

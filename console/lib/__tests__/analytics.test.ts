@@ -29,6 +29,8 @@ function dealer(id: string, over: Partial<Dealer> = {}): Dealer {
       googleCustomerId: null, googleState: "ready", googleVerified: true,
       metaBusinessId: null, metaPageId: null, metaAdAccountId: null,
       metaState: "ready", metaVerified: true,
+      googleBusinessProfileLinked: true,
+      googleBusinessAccountEmail: null,
       servicesAgreementSigned: true, legalDocsCollected: true,
     },
     createdAt: "", updatedAt: "", ...over,

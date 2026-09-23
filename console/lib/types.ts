@@ -184,6 +184,15 @@ export interface PlatformAssets {
   meta: PlatformAccount
 
   /**
+   * Whether the showroom's Google Business Profile is linked for location
+   * assets. Without it ads cannot show an address, directions or a call
+   * button, and store visits are not measurable — all of which matter
+   * disproportionately for a business people physically drive to.
+   */
+  googleBusinessProfileLinked: boolean
+  googleBusinessAccountEmail: string | null
+
+  /**
    * The signed services agreement naming us as the dealer's authorised
    * representative. This is the actual authorisation layer for both
    * platforms — Meta's Pages Policy requires an "authorised representative"
@@ -460,4 +469,95 @@ export interface PlatformToken {
   scopes: string[]
   grantedAt: string
   lastVerifiedAt: string | null
+}
+
+
+/* --------------------------------------------------------- Campaign types */
+
+/**
+ * Google campaign types worth building for automotive lead generation.
+ *
+ * Deliberately three, not six:
+ *  - Display is being consolidated into Demand Gen, with standalone creation
+ *    on the way out. Building it now builds on a closing door.
+ *  - Video Action Campaigns were retired in March 2025 and auto-upgraded to
+ *    Demand Gen by May 2026. Lead form assets did not survive that migration.
+ *  - Local campaigns folded into Performance Max back in 2022. Store visits
+ *    are a PMax objective now, not a campaign type.
+ *  - Vehicle ads need a Merchant Center vehicle feed and are not available in
+ *    India at all — not in beta, no announced date.
+ */
+export type CampaignType = "search" | "performance_max" | "demand_gen"
+
+export interface CampaignTypeSpec {
+  id: CampaignType
+  label: string
+  /** Google Ads API AdvertisingChannelType. */
+  channelType: string
+  description: string
+  /** Lead form assets are confirmed only on Search and Performance Max. */
+  supportsLeadForm: boolean
+  requiresImages: boolean
+  /** Minimum creative the platform will accept before it serves. */
+  requirements: {
+    headlines: number
+    longHeadlines: number
+    descriptions: number
+    landscapeImages: number
+    squareImages: number
+    squareLogos: number
+  }
+}
+
+export const CAMPAIGN_TYPES: Record<CampaignType, CampaignTypeSpec> = {
+  search: {
+    id: "search",
+    label: "Search",
+    channelType: "SEARCH",
+    description:
+      "Catches people already looking — \u201ccreta on road price\u201d, \u201chyundai showroom near me\u201d. Highest intent, text only, no imagery needed.",
+    supportsLeadForm: true,
+    requiresImages: false,
+    requirements: {
+      headlines: 3, longHeadlines: 0, descriptions: 2,
+      landscapeImages: 0, squareImages: 0, squareLogos: 0,
+    },
+  },
+  performance_max: {
+    id: "performance_max",
+    label: "Performance Max",
+    channelType: "PERFORMANCE_MAX",
+    description:
+      "Runs across Search, YouTube, Discover, Gmail and Maps from one asset group. This is also how store visits and directions work now — Local campaigns folded into it.",
+    supportsLeadForm: true,
+    requiresImages: true,
+    requirements: {
+      headlines: 3, longHeadlines: 1, descriptions: 2,
+      landscapeImages: 1, squareImages: 1, squareLogos: 1,
+    },
+  },
+  demand_gen: {
+    id: "demand_gen",
+    label: "Demand Gen",
+    channelType: "DEMAND_GEN",
+    description:
+      "Visual reach on YouTube, Shorts, Discover and Gmail. Good for a model launch or retargeting. Send traffic to the landing page — lead form support here is not dependable yet.",
+    supportsLeadForm: false,
+    requiresImages: true,
+    requirements: {
+      headlines: 1, longHeadlines: 0, descriptions: 1,
+      landscapeImages: 1, squareImages: 1, squareLogos: 1,
+    },
+  },
+}
+
+/** Image assets a showroom has supplied, by role. */
+export interface ImageAsset {
+  id: string
+  dealerId: string
+  role: "landscape" | "square" | "logo" | "portrait"
+  url: string
+  widthPx: number
+  heightPx: number
+  uploadedAt: string
 }

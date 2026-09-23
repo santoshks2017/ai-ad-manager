@@ -85,6 +85,8 @@ export async function POST(req: Request) {
       metaState: "not_started",
       metaVerified: false,
       meta: account,
+      googleBusinessProfileLinked: false,
+      googleBusinessAccountEmail: null,
       servicesAgreementSigned: false,
       legalDocsCollected: false,
     },

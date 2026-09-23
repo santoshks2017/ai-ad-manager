@@ -50,6 +50,14 @@ export interface CreateCampaignInput {
   offer?: string | null
   /** The showroom's own Facebook Page. Meta ads cannot run without one. */
   metaPageId?: string | null
+  /** Google campaign type. Defaults to search. */
+  campaignType?: "search" | "performance_max" | "demand_gen"
+  /**
+   * Resource name of a LOCATION_SYNC asset set, when the showroom's Business
+   * Profile is linked. Location assets are inherited from the customer level,
+   * so this is informational rather than attached per campaign.
+   */
+  locationAssetSet?: string | null
 }
 
 /** What a full build actually created, so the UI can report it honestly. */

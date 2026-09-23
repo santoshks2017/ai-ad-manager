@@ -2,12 +2,16 @@ import Link from "next/link"
 import { Shell } from "@/components/Shell"
 import { getStore } from "@/lib/store"
 import { NewCampaignForm } from "./NewCampaignForm"
+import type { ImageAsset } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
 
 export default async function NewCampaign() {
   const store = await getStore()
   const dealers = await store.listDealers()
+  // No image library yet, so Performance Max and Demand Gen will report what
+  // they need rather than creating campaigns that cannot serve.
+  const images: ImageAsset[] = []
 
   return (
     <Shell
@@ -19,7 +23,7 @@ export default async function NewCampaign() {
         </Link>
       }
     >
-      <NewCampaignForm dealers={dealers} />
+      <NewCampaignForm dealers={dealers} images={images} />
     </Shell>
   )
 }

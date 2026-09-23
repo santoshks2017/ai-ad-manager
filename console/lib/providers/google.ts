@@ -408,3 +408,94 @@ export class GoogleAdsProvider implements AdProvider {
     return { ok: true, data: rows, error: null, provenance: this.provenance }
   }
 }
+
+/**
+ * Link a showroom's Google Business Profile so its locations become assets.
+ *
+ * Location assets are what let an ad show an address, a directions link and a
+ * call button, and they are a precondition for store-visit measurement. For a
+ * business people physically drive to, running without them leaves real
+ * performance on the table.
+ *
+ * Attached at the CUSTOMER level deliberately: Google inherits location assets
+ * down to every campaign from there, so there is nothing to attach per
+ * campaign and nothing to forget when the next one is built.
+ *
+ * ⚠️ UNVERIFIED like the rest of this provider. The nested field names under
+ * `location_set` in particular are the kind of detail that is easy to get
+ * subtly wrong from documentation alone — check against the generated client
+ * for the API version in use before relying on this.
+ */
+export async function linkBusinessProfile(
+  provider: GoogleAdsProvider,
+  accountId: string,
+  opts: {
+    /** OAuth token from the SHOWROOM's Google account, scope business.manage. */
+    businessProfileToken: string
+    businessProfileEmail: string
+    businessAccountId?: string | null
+  },
+): Promise<ProviderResult<{ assetSetResource: string }>> {
+  if (!provider.isConfigured()) {
+    return {
+      ok: false, data: null, provenance: "live",
+      error: "Google Ads is not configured.",
+    }
+  }
+
+  const customerId = accountId.replace(/-/g, "")
+  const post = (provider as unknown as {
+    post: <T>(path: string, body: unknown) => Promise<ProviderResult<T>>
+  }).post.bind(provider)
+
+  const assetSetRes = await post<{ results?: { resourceName: string }[] }>(
+    `/customers/${customerId}/assetSets:mutate`,
+    {
+      operations: [
+        {
+          create: {
+            name: `business-profile-${opts.businessProfileEmail}`,
+            type: "LOCATION_SYNC",
+            locationSet: {
+              // The showroom owns its own profile; we are a manager on it.
+              locationOwnershipType: "BUSINESS_OWNER",
+              businessProfileLocationSet: {
+                httpAuthorizationToken: opts.businessProfileToken,
+                emailAddress: opts.businessProfileEmail,
+                ...(opts.businessAccountId
+                  ? { businessAccountId: opts.businessAccountId }
+                  : {}),
+              },
+            },
+          },
+        },
+      ],
+    },
+  )
+  if (!assetSetRes.ok) {
+    return { ok: false, data: null, error: assetSetRes.error, provenance: "live" }
+  }
+
+  const assetSetResource = assetSetRes.data?.results?.[0]?.resourceName
+  if (!assetSetResource) {
+    return {
+      ok: false, data: null, provenance: "live",
+      error: "Google Ads returned no asset set resource name.",
+    }
+  }
+
+  const linkRes = await post<unknown>(
+    `/customers/${customerId}/customerAssetSets:mutate`,
+    { operations: [{ create: { assetSet: assetSetResource } }] },
+  )
+  if (!linkRes.ok) {
+    return { ok: false, data: null, error: linkRes.error, provenance: "live" }
+  }
+
+  return {
+    ok: true,
+    data: { assetSetResource },
+    error: null,
+    provenance: "live",
+  }
+}

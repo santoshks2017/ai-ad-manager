@@ -19,6 +19,7 @@ const Body = z.object({
   headline: z.string().min(3).max(120),
   description: z.string().min(3).max(300),
   offer: z.string().max(120).nullable().default(null),
+  campaignType: z.enum(["search", "performance_max", "demand_gen"]).default("search"),
   goLive: z.boolean().default(false),
 })
 
@@ -118,6 +119,7 @@ export async function POST(req: Request) {
       description: body.description,
       offer: body.offer,
       goLive: body.goLive,
+      campaignType: body.campaignType,
       metaPageId: dealer.platform?.metaPageId ?? null,
     }
 
