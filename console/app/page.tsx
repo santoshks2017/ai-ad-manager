@@ -40,9 +40,14 @@ export default async function DealerBook() {
       title="Showroom book"
       subtitle="Last 30 days across every showroom we run"
       actions={
-        <Link href="/quote" className="btn-primary">
-          New quote
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/showrooms/new" className="btn-quiet">
+            Add showroom
+          </Link>
+          <Link href="/quote" className="btn-primary">
+            New quote
+          </Link>
+        </div>
       }
     >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-rule border border-rule mb-8">
