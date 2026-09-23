@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "google-oauth": "tsx scripts/google-oauth.ts",
+    "check-credentials": "tsx scripts/check-credentials.ts"
   },
   "dependencies": {
     "next": "16.3.5",

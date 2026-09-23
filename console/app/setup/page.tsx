@@ -40,10 +40,29 @@ export default async function Setup() {
             ))}
           </div>
           {providers.every((p) => !p.live) && (
-            <p className="text-sm text-ink-soft mt-3">
-              With no platform credentials, every figure in this console is generated.
-              The application logic is real — the delivery behind it is not.
-            </p>
+            <>
+              <p className="text-sm text-ink-soft mt-3">
+                With no platform credentials, every figure in this console is generated.
+                The application logic is real — the delivery behind it is not.
+              </p>
+              <div className="card p-4 mt-4">
+                <div className="eyebrow mb-2">Switching the platforms on</div>
+                <p className="text-sm text-ink-soft">
+                  The full runbook is in{" "}
+                  <span className="num">docs/credentials-setup.md</span>. Two commands
+                  do the work once the accounts exist:
+                </p>
+                <pre className="num text-2xs bg-ground border border-rule p-3 mt-2.5 overflow-x-auto">
+{`npm run google-oauth        # mint a Google Ads refresh token
+npm run check-credentials   # verify both platforms against the live APIs`}
+                </pre>
+                <p className="text-2xs text-ink-faint mt-2.5">
+                  Start Meta Business Verification first — it takes 3 to 14 days and
+                  gates everything else on that side. A Google test account needs no
+                  approval at all and can verify the provider code this week.
+                </p>
+              </div>
+            </>
           )}
         </section>
 
